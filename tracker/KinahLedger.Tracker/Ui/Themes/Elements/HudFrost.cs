@@ -590,10 +590,10 @@ sealed partial class HudFrost : ModernLook
         ElemFx.Play(_sky, bits, _lineAnchor, 0, 0, 1900, t =>
         {
             LineGlint(t < .5 ? Seg(t, 0, .5) : -1);
-            double k = Out(Seg(t, .1, .3));
-            shift.X = -10 * (1 - k);
-            pop.ScaleX = pop.ScaleY = ElemFx.Punch(t, .1, .36, .82, 2);
-            chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
+            double k = Out(Seg(t, .1, .3)), gone = Seg(t, .76, .97);
+            shift.X = -10 * (1 - k) + 6 * gone;
+            pop.ScaleX = pop.ScaleY = ElemFx.Punch(t, .1, .36, .82, 2) * (1 - .1 * gone);
+            chip.Opacity = t < .76 ? k : 1 - Out(gone);
         }, () => { LineGlint(-1); _lineAnchor.Children.Remove(chip); });
     }
 
@@ -669,7 +669,7 @@ sealed partial class HudFrost : ModernLook
             // a breath in (the ring draws in, cold), then the hit: it bursts out big and settles
             swell.ScaleX = swell.ScaleY = t < .1 ? 1 - .12 * Out(Seg(t, 0, .1)) : ElemFx.Punch(t, .1, .5, .88, 3.4);
             _lineHop.Y = -4 * ElemFx.Hit(t, .1, .16, .42);
-            if (rateK != null) rateK.ScaleX = rateK.ScaleY = t < .12 ? 1 : ElemFx.Punch(t, .12, .42, 1.1, 2);
+            if (rateK != null) rateK.ScaleX = rateK.ScaleY = t < .12 ? 1 : ElemFx.Punch(t, .12, .42, 1.16, 2);
             double k = Seg(t, .12, .6);
             Show(burst, k is > 0 and < 1 ? .9 * (1 - k) : 0);
             bk.ScaleX = bk.ScaleY = .7 + .5 * Out(k);
@@ -917,7 +917,8 @@ sealed partial class HudFrost : ModernLook
         vig.Freeze();
         dc.DrawRectangle(vig, null, new Rect(0, 0, s.Width, s.Height));
         double q = Math.PI / 2;
-        foreach (var (o, a0, seed) in new[] { (new Point(2, 2), 0.0, 5), (new Point(s.Width - 2, 2), q, 6), (new Point(2, s.Height - 2), -q, 7), (new Point(s.Width - 2, s.Height - 2), Math.PI, 8) })
+        // the top corners and the foot's right (the foot's left holds "Total": kept clear)
+        foreach (var (o, a0, seed) in new[] { (new Point(2, 2), 0.0, 5), (new Point(s.Width - 2, 2), q, 6), (new Point(s.Width - 2, s.Height - 2), Math.PI, 8) })
         {
             var g = Veins(o, seed, a0 + .16, a0 + q - .16, 4, 14, 30);
             dc.DrawGeometry(null, Mod.P(Mod.Br(Colors.White, .25), 3, round: true), g);

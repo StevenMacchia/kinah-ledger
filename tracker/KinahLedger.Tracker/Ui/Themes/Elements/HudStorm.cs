@@ -745,10 +745,10 @@ sealed partial class HudStorm : ModernLook, IThemeCard
         {
             Zap(t < .45 ? Seg(t, 0, .45) : -1);
             arc.Opacity = t < .12 ? 0 : t < .18 ? 1 : 1 - Seg(t, .18, .4);
-            double k = Out(Seg(t, .14, .3));
-            shift.X = -8 * (1 - k);
-            pop.ScaleX = pop.ScaleY = ElemFx.Punch(t, .14, .36, .8, 2);
-            chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
+            double k = Out(Seg(t, .14, .3)), gone = Seg(t, .76, .97);
+            shift.X = -8 * (1 - k) + 6 * gone;
+            pop.ScaleX = pop.ScaleY = ElemFx.Punch(t, .14, .36, .8, 2) * (1 - .1 * gone);
+            chip.Opacity = t < .76 ? k : 1 - Out(gone);
         }, () => { Zap(-1); _lineAnchor.Children.Clear(); });
     }
 
@@ -797,17 +797,22 @@ sealed partial class HudStorm : ModernLook, IThemeCard
             bits.Add(SparkEl(i % 2 == 0 ? 15 : 11, c), new Point(Math.Cos(a) * 8, Math.Sin(a) * 6), new Vector(Math.Cos(a) * dist[i], Math.Sin(a) * dist[i] * .8),
                 g: 10, delay: .05 + .012 * i, life: .36, s0: 1.1, s1: .6, face: true);
         }
+        // the strike floods the whole strip with the grade's colour for a beat
+        var wash = ElemFx.Wash(c, 2);
+        int wi = row != null ? _rare.Children.IndexOf(row) : -1;
+        _rare.Children.Insert(wi >= 0 ? wi : _rare.Children.Count, wash);
         ElemFx.Play(_sky, bits, (FrameworkElement?)tile ?? _rare, .5, .5, 1700, t =>
         {
-            _rareBloom.ScaleX = Math.Max(.02, Out(Seg(t, 0, .3)));
+            wash.Opacity = ElemFx.Hit(t, .04, .09, .42);
+            _rareBloom.ScaleX = Math.Max(.02, Out(Seg(t, 0, .1)));
             if (row != null) row.Opacity = Seg(t, 0, .1);
             if (_rareFlash != null) Lite(_rareFlash, ElemFx.Hit(t, .0, .05, .6) + .6 * ElemFx.Hit(t, .12, .14, .3));
             _rareBurst = t is > .1 and < .6 ? Seg(t, .1, .6) : -1;
             sparks.InvalidateVisual();
             sc.ScaleX = sc.ScaleY = t < .02 ? .3 : ElemFx.Punch(t, .02, .36, .3, 3);
             // the whole strip takes the strike: drawn in a touch, then it lands past its size and settles
-            _rareK.ScaleX = _rareK.ScaleY = t < .02 ? .9 : ElemFx.Punch(t, .02, .34, .9, 2.6);
-        }, () => { _rareBloom.ScaleX = 1; if (row != null) row.Opacity = 1; if (_rareFlash != null) Lite(_rareFlash, 0); _rareBurst = -1; sparks.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; _rareK.ScaleX = _rareK.ScaleY = 1; });
+            _rareK.ScaleX = _rareK.ScaleY = t < .03 ? .82 : ElemFx.Punch(t, .03, .34, .82, 3);
+        }, () => { _rare.Children.Remove(wash); _rareBloom.ScaleX = 1; if (row != null) row.Opacity = 1; if (_rareFlash != null) Lite(_rareFlash, 0); _rareBurst = -1; sparks.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; _rareK.ScaleX = _rareK.ScaleY = 1; });
     }
 
     /// <summary>
@@ -958,7 +963,8 @@ sealed partial class HudStorm : ModernLook, IThemeCard
             bits.Add(BoltEl(34, 58, 311), new Point(sx - 1, -23), new Vector(0, 0), delay: .14, life: .09);
             bits.Add(ElemFx.Glow(ArcC, 90, 40, .9, 1), new Point(sx, 2), new Vector(0, 0), delay: 0, life: .12, s0: .6, s1: 1.1);
             // the storm still crackling over it: a smaller strike further along, half way through
-            bits.Add(BoltEl(22, 40, 331), new Point(bw * .62, -18), new Vector(0, 0), delay: .45, life: .06);
+            bits.Add(BoltEl(30, 54, 331), new Point(bw * .62, -22), new Vector(0, 0), delay: .45, life: .07);
+            bits.Add(ElemFx.Glow(ArcC, 60, 30, .9, 1), new Point(bw * .62, 4), new Vector(0, 0), delay: .45, life: .08, s0: .6, s1: 1.1);
             double[] angs = { -165, -128, -96, -64, -32, 0, 20 }, dist = { 26, 40, 46, 50, 48, 40, 30 };
             for (int i = 0; i < angs.Length; i++)
             {

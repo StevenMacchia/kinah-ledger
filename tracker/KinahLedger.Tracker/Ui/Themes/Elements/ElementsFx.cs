@@ -145,6 +145,20 @@ static class ElemFx
     /// <summary>An echo of a chip's outline (<paramref name="w"/> x <paramref name="h"/>, corners <paramref name="radius"/>), scaled out and faded.</summary>
     public static Rectangle Outline(Color c, double w, double h, double th, double radius = 3, double a = 1) => new() { Width = w, Height = h, RadiusX = radius, RadiusY = radius, Stroke = Frozen(Mod.A(c, a)), StrokeThickness = th, IsHitTestVisible = false };
 
+    /// <summary>
+    /// A rare drop's wash over its card: the grade's colour filling it, brightest at the tile's end, under a bright rim of the
+    /// colour (made once per drop; the moment flashes it by its opacity).
+    /// </summary>
+    public static Border Wash(Color c, double radius = 3)
+    {
+        var fill = new LinearGradientBrush { StartPoint = new Point(0, .5), EndPoint = new Point(1, .5) };
+        fill.GradientStops.Add(new GradientStop(Mod.A(Mod.Mix(c, Colors.White, .35), .85), 0));
+        fill.GradientStops.Add(new GradientStop(Mod.A(c, .6), .45));
+        fill.GradientStops.Add(new GradientStop(Mod.A(c, .32), 1));
+        fill.Freeze();
+        return new Border { IsHitTestVisible = false, CornerRadius = new CornerRadius(radius), Background = fill, BorderThickness = new Thickness(2), BorderBrush = Frozen(Mod.Mix(c, Colors.White, .6)), Opacity = 0 };
+    }
+
     static SolidColorBrush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 
     static Geometry Fz(Geometry g) { g.Freeze(); return g; }

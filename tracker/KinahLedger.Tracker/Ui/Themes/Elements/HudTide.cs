@@ -655,7 +655,7 @@ sealed partial class HudTide : ModernLook
             Stir(Seg(t, 0, .88), 1.6);
             rise.Y = 4 - 12 * Out(Seg(t, .06, .5)) - 4 * Seg(t, .5, 1);
             pop.ScaleX = pop.ScaleY = ElemFx.Punch(t, .06, .3, .8, 2);
-            cap.Opacity = t < .8 ? Seg(t, .06, .14) : 1 - Seg(t, .8, 1);
+            cap.Opacity = t < .74 ? Seg(t, .06, .14) : 1 - Out(Seg(t, .74, .95));
         }, () => { Stir(-1, 0); _lineTop.Children.Remove(cap); });
     }
 
@@ -705,15 +705,21 @@ sealed partial class HudTide : ModernLook
         bits.Add(ElemFx.Glow(c, rw * 1.05, 60, .6, .3), new Point(rw / 2 - 23, 0), new Vector(0, 0), delay: .03, life: .4, s0: .7, s1: 1);
         var cardK = new ScaleTransform(1, 1);
         _rare.RenderTransformOrigin = new Point(0, .5); _rare.RenderTransform = cardK;
+        // the spout floods the whole glass with the grade's colour for a beat
+        var wash = ElemFx.Wash(c, 14);
+        wash.Margin = new Thickness(1);
+        int wi = tile?.Parent is UIElement rowEl ? _rare.Children.IndexOf(rowEl) : -1;
+        _rare.Children.Insert(wi >= 0 ? wi : _rare.Children.Count, wash);
         ElemFx.Play(_sky, bits, (FrameworkElement?)tile ?? art, .5, .5, 1700, t =>
         {
-            cardK.ScaleX = cardK.ScaleY = t < .03 ? .9 : ElemFx.Punch(t, .03, .32, .9, 2.6);
+            wash.Opacity = ElemFx.Hit(t, .04, .09, .42);
+            cardK.ScaleX = cardK.ScaleY = t < .03 ? .82 : ElemFx.Punch(t, .03, .32, .82, 1.8);
             double b = Math.Sin(Math.PI * Math.Min(1, t * 1.6));
             glow.Opacity = Math.Max(b, t < .06 ? t / .06 : 0); gs.ScaleX = gs.ScaleY = .5 + .5 * Out(Seg(t, 0, .35));
             ripples.Step(Seg(t, .02, .9));
             if (_whirl is { } wh && _whirlR is { } wr) { wh.Opacity = t < .08 ? t / .08 : 1 - Seg(t, .7, 1); wr.Angle = -360 * Out(t); }
             sc.ScaleX = sc.ScaleY = t < .04 ? .3 : ElemFx.Punch(t, .04, .38, .3, 3);
-        }, () => { glow.Opacity = 0; ripples.Step(-1); if (_whirl != null) _whirl.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; cardK.ScaleX = cardK.ScaleY = 1; });
+        }, () => { _rare.Children.Remove(wash); glow.Opacity = 0; ripples.Step(-1); if (_whirl != null) _whirl.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; cardK.ScaleX = cardK.ScaleY = 1; });
     }
 
     /// <summary>
@@ -883,8 +889,7 @@ sealed partial class HudTide : ModernLook
             var front = new System.Windows.Shapes.Rectangle { Width = pw * .96, Height = 5, RadiusX = 2.5, RadiusY = 2.5, Fill = Mod.Grad(false, (Mod.A(FoamC, 0), 0), (Mod.A(Colors.White, .95), .3), (Mod.A(Colors.White, .95), .7), (Mod.A(FoamC, 0), 1)) };
             bits.Add(front, new Point(pw / 2, 10), new Vector(0, fh - 64), delay: .1, life: .3, s0: 1, s1: 1, peak: .95);
             bits.Add(ElemFx.Glow(AquaC, pw * .95, 34, .5, .3), new Point(pw / 2, 4), new Vector(0, fh - 64), delay: .11, life: .32, s0: 1, s1: 1, peak: .8);
-            bits.Add(ElemFx.Glow(Colors.White, 90, 30, 1, 1), new Point(60, 0), new Vector(0, 0), delay: .07, life: .12, s0: .6, s1: 1.1);
-            bits.Add(ElemFx.Glow(FoamC, 110, 48, .9, 1), new Point(pw - 74, 0), new Vector(0, 0), delay: .16, life: .26, s0: .4, s1: 1.1);
+            // (the crash's light is its foam front: no soft blobs over the plate)
         }
         else
             for (int i = 0; i < 6; i++)

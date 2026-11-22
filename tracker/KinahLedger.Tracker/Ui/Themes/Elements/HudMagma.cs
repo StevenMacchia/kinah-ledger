@@ -90,7 +90,7 @@ sealed partial class HudMagma : ModernLook
     /// <summary>Over everything, unclipped: the moments' short-lived bits (ElementsFx.cs), each moment on a layer of its own.</summary>
     readonly Canvas _sky = new() { IsHitTestVisible = false };
     /// <summary>A wipe's cooling: an ash-dark film over the slab and its flows (shown by its opacity).</summary>
-    readonly Border _fightAsh = new() { IsHitTestVisible = false, Margin = new Thickness(3), CornerRadius = new CornerRadius(3), Opacity = 0, Visibility = Visibility.Collapsed, Background = Frozen(Color.FromArgb(0xFF, 0x16, 0x13, 0x12)) };
+    readonly Border _fightAsh = new() { IsHitTestVisible = false, Margin = new Thickness(0), CornerRadius = new CornerRadius(4), Opacity = 0, Visibility = Visibility.Collapsed, Background = Frozen(Color.FromArgb(0xFF, 0x16, 0x13, 0x12)) };
     /// <summary>The hour's host (its heat shimmer on your best passed), the rare drop's grade colour.</summary>
     FrameworkElement? _rateHost;
     Color _rareC = Colors.White;
@@ -573,10 +573,10 @@ sealed partial class HudMagma : ModernLook
             _sheenX.X = -64 + (w + 64) * k0;
             _sheenBand.Opacity = t < .5 ? Math.Sin(Math.PI * k0) : 0;
             _lineFlare.Opacity = t < .5 ? .6 * Math.Sin(Math.PI * k0) : 0;
-            double k = Out(Seg(t, .1, .3));
-            shift.X = -10 * (1 - k);
-            pop.ScaleX = pop.ScaleY = ElemFx.Punch(t, .1, .34, .8, 2);
-            chip.Opacity = t < .82 ? k : 1 - Seg(t, .82, 1);
+            double k = Out(Seg(t, .1, .3)), gone = Seg(t, .76, .97);
+            shift.X = -10 * (1 - k) + 6 * gone;
+            pop.ScaleX = pop.ScaleY = ElemFx.Punch(t, .1, .34, .8, 2) * (1 - .1 * gone);
+            chip.Opacity = t < .76 ? k : 1 - Out(gone);
         }, () => { _lineFx.Visibility = Visibility.Collapsed; _lineFlare.Opacity = 0; _lineAnchor.Children.Remove(chip); });
     }
 
@@ -621,13 +621,19 @@ sealed partial class HudMagma : ModernLook
         bits.Add(ElemFx.Glow(c, rw * 1.1, 56, .7, .3), new Point(rw / 2 - 22, 0), new Vector(0, 0), delay: .04, life: .4, s0: .7, s1: 1);
         var cardK = new ScaleTransform(1, 1);
         _rare.RenderTransformOrigin = new Point(0, .5); _rare.RenderTransform = cardK;
+        // the eruption floods the whole slab with the grade's colour for a beat
+        var wash = ElemFx.Wash(c, 3);
+        wash.Margin = new Thickness(2);
+        int wi = tile?.Parent is UIElement rowEl ? _rare.Children.IndexOf(rowEl) : -1;
+        _rare.Children.Insert(wi >= 0 ? wi : _rare.Children.Count, wash);
         ElemFx.Play(_sky, bits, (FrameworkElement?)tile ?? art, .5, .5, 1700, t =>
         {
-            open.ScaleX = .25 + .75 * Out(Seg(t, 0, .3));
+            wash.Opacity = ElemFx.Hit(t, .04, .09, .42);
+            open.ScaleX = .25 + .75 * Out(Seg(t, 0, .1));
             flare.Opacity = ElemFx.Hit(t, 0, .12, .85);
             sc.ScaleX = sc.ScaleY = t < .04 ? .3 : ElemFx.Punch(t, .04, .38, .3, 3);
-            cardK.ScaleX = cardK.ScaleY = t < .04 ? .9 : ElemFx.Punch(t, .04, .34, .9, 2.6);
-        }, () => { open.ScaleX = 1; flare.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; cardK.ScaleX = cardK.ScaleY = 1; });
+            cardK.ScaleX = cardK.ScaleY = t < .03 ? .82 : ElemFx.Punch(t, .03, .34, .82, 3);
+        }, () => { _rare.Children.Remove(wash); open.ScaleX = 1; flare.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; cardK.ScaleX = cardK.ScaleY = 1; });
     }
 
     /// <summary>
@@ -763,7 +769,7 @@ sealed partial class HudMagma : ModernLook
             // rows, stay translucent behind the words; a bead of lava flies off each tip and fades
             foreach (var (jet, sc, bead, bt, jh, delay, peak) in _jetParts)
             {
-                double k = Seg(t, delay, .5 + delay);
+                double k = Seg(t, delay * .6, .34 + delay * .6);
                 sc.ScaleY = k < .4 ? 1.15 * Out(Seg(k, 0, .4)) : 1.15 * (1 - Seg(k, .4, 1) * Seg(k, .4, 1));
                 jet.Opacity = k is > 0 and < 1 ? peak * (1 - .6 * Seg(k, .6, 1)) : 0;
                 double b = Seg(k, .3, 1);
@@ -848,7 +854,7 @@ sealed partial class HudMagma : ModernLook
         }
         else
         {
-            bits.Add(ElemFx.Glow(Color.FromRgb(0xA8, 0x9E, 0x98), bw * .7, 34, .55, 0), new Point(bw * .3, 12), new Vector(0, 0), delay: .14, life: .4, s0: .5, s1: 1.1, peak: .9);
+            bits.Add(ElemFx.Glow(Color.FromRgb(0xA8, 0x9E, 0x98), bw * .7, 26, .55, 0), new Point(bw * .3, -3), new Vector(0, -4), delay: .14, life: .36, s0: .5, s1: 1.1, peak: .9);
             for (int i = 0; i < 5; i++)
                 bits.Add(ElemFx.Glow(Color.FromRgb(0x9A, 0x90, 0x8A), 30 + 6 * (i % 2), 26 + 6 * (i % 2), .45, 0), new Point(bw * (.18 + .16 * i), 64), new Vector((i % 2 == 0 ? 6 : -6), -36),
                     delay: .14 + .06 * i, life: .6, s0: .6, s1: 1.6, peak: .8);
@@ -880,9 +886,9 @@ sealed partial class HudMagma : ModernLook
                 // the banner comes down heavy and slumps on landing, a puff of ash off it
                 double i = Out(Seg(t, 0, .16));
                 band.Opacity = Math.Min(1, Seg(t, 0, .08) * 1.5) * (1 - o);
-                drop.Y = -10 * (1 - i) + 3 * ElemFx.Hit(t, .14, .22, .6);
+                drop.Y = -10 * (1 - i) + 6 * ElemFx.Hit(t, .14, .2, .55);
                 slam.ScaleX = slam.ScaleY = 1;
-                _fightAsh.Opacity = .42 * Seg(t, .04, .36) * (1 - Seg(t, .7, .94));
+                _fightAsh.Opacity = .46 * Seg(t, .1, .3) * (1 - Seg(t, .82, 1));
                 _fightAsh.Visibility = _fightAsh.Opacity > .01 ? Visibility.Visible : Visibility.Collapsed;
                 _fightShift.Y = 2.5 * Math.Sin(Math.PI * Seg(t, .04, .92));
             }
