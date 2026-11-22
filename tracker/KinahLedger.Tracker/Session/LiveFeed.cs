@@ -108,6 +108,12 @@ public sealed class LiveFeed
         }
     }
 
+    /// <summary>The newest line <paramref name="match"/> picks, or null.</summary>
+    public FeedLine? Find(Func<FeedLine, bool> match)
+    {
+        lock (_lock) return _lines.LastOrDefault(match);
+    }
+
     /// <summary>Takes the line out ("Not a drop"); returns where it stood, or -1 when it isn't there (scrolled out of the last <see cref="Keep"/>).</summary>
     public int Remove(FeedLine line)
     {

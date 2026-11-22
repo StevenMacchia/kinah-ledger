@@ -1545,6 +1545,26 @@ public sealed class BossParser
         if (!e.PartialWhy.Contains(why)) e.PartialWhy.Add(why);
     }
 
+    /// <summary>Under this share of the boss's HP credited to a row, a pull's figures are not the group's whole: partial.</summary>
+    public const double MinCoverage = 0.95;
+    /// <summary>A kill whose damage seen is under this share of the boss's HP was seen only in part: partial.</summary>
+    public const double MinKillSeen = 0.97;
+    public const string UnplacedWhy = "part of the boss's damage came from players the tracker couldn't place";
+    public const string KillUnseenWhy = "the boss died with part of its HP not seen";
+
+    /// <summary>
+    /// A pull whose figures leave out part of the fight is partial, so it is never a best and its shares are not taken as the
+    /// group's whole: under <see cref="MinCoverage"/> of the boss's HP in a row (2026-11-20 20:00: Harcon 52%, Gadioton 71%,
+    /// Berk 74%, damage from players never placed in the group, so the group's DPS read low and each share high), or a kill
+    /// with under <see cref="MinKillSeen"/> of the boss's HP seen dealt (2026-11-17 23:24: Gadioton, 7.6M of 18.576M seen,
+    /// its first hit 25 s in). Damage past the boss's HP (a heal of it, as Ruthilis's) is no gap.
+    /// </summary>
+    static void Incomplete(Encounter e, BossOutcome outcome)
+    {
+        if (e.Coverage is { } cov && cov < MinCoverage) MarkPartial(e, UnplacedWhy);
+        if (outcome == BossOutcome.Kill && e.BossMaxHp > 0 && e.BossDamage < MinKillSeen * e.BossMaxHp) MarkPartial(e, KillUnseenWhy);
+    }
+
     // ---- ends ----
 
     /// <summary>
@@ -1570,6 +1590,7 @@ public sealed class BossParser
         e.LastAt = Max(e.LastAt, e.End.Value);
         e.Outcome = Encounter.OutcomeName(outcome);
         Settle(e);
+        if (!e.Wave && !e.WorldBoss && e.HasDamage) Incomplete(e, outcome);
         if (!e.Wave) { _alwaysEnded = Copy(e); FightHealth(e); }
         _endedPull = (e.End.Value, e.Wave || _alwaysEnded == null ? new List<Encounter> { e } : new List<Encounter> { e, _alwaysEnded });
         if (outcome == BossOutcome.Kill)

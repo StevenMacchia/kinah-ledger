@@ -2121,6 +2121,42 @@ public static class ParserTests
             }
         }
 
+        // a pull whose figures leave part of the fight out is partial, so never a best: Steven's Krao Cave Hard records. 2026-11-20
+        // 19:59:55 Enhanced Harcon, a kill, 8,995,779 of its 18,576,000 HP from attackers never placed (52% credited: the group's
+        // DPS low, each share high); 2026-11-17 23:24:08 Neglected Gadioton, a "kill" with 7,599,516 of its 18,576,000 HP seen
+        // (TOMNEN's first hit 21 s in, Swoly's 25 s). A whole kill stays whole, and damage past the boss's HP is no gap
+        {
+            Encounter? Pull(string boss, long id, long max, params (double At, long Src, long Amount)[] hits)
+            {
+                var kept = new List<Encounter>();
+                var p = new BossParser(BossBook.Shared) { Ended = kept.Add, Quiet = true };
+                var g0 = t.AddDays(7);
+                p.Take(new InstanceEntered(g0, ContentKind.Expedition, "Krao Cave", 9100));
+                p.Take(new GroupChanged(g0, new[] { Me, Ally, Ally2 }));
+                p.Take(new BossEngaged(g0.AddSeconds(0.5), boss, id));
+                p.Take(new BossHealth(g0.AddSeconds(0.5), id, max, max));
+                double last = 0;
+                foreach (var (at, src, amount) in hits)
+                {
+                    p.Take(src == 0 ? new DamageDealt(g0.AddSeconds(at), 0, id, amount, Reason: 7) : new DamageDealt(g0.AddSeconds(at), src, id, amount, src == 1 ? "Swoly" : src == 2 ? "Aerin" : "Thorne", src == 1));
+                    last = Math.Max(last, at);
+                }
+                p.Take(new UnitDied(g0.AddSeconds(last + 0.2), id, boss, true));
+                return kept.FirstOrDefault(e => e.Mode == "boss");
+            }
+            var harcon = Pull("Enhanced Harcon", 25710, 18_576_000, (0, 1, 4_508_477), (1, 0, 8_722_770), (2, 0, 273_009), (5, 2, 1_681_661), (10, 3, 3_390_083));
+            var gadioton = Pull("Neglected Gadioton", 25589, 18_576_000, (0.1, 2, 5_374_403), (21, 3, 708_182), (25, 1, 412_054), (36, 2, 1_104_877));
+            var whole = Pull("Ultimate Berk", 25711, 24_316_500, (1, 1, 10_000_000), (20, 2, 8_000_000), (40, 3, 6_316_500));
+            var over = Pull("Ultimate Berk", 25711, 24_316_500, (1, 1, 12_000_000), (20, 2, 8_000_000), (40, 3, 6_316_500));
+            string Say(Encounter? e) => e == null ? "none" : $"{e.Outcome} {(e.Partial ? "partial: " + string.Join("; ", e.PartialWhy) : "whole")} ({Encounter.Pct(e.Coverage ?? 0)} credited, {Ui.Amounts.Short(e.BossDamage)} of {Ui.Amounts.Short(e.BossMaxHp)})";
+            Check(harcon is { Outcome: "kill", Partial: true } && harcon.PartialWhy.SequenceEqual(new[] { BossParser.UnplacedWhy }) && harcon.Coverage < 0.53 && FightRecords.Counts(harcon),
+                $"under 95% of the boss's HP in a row: partial, your own figures still a record's ({Say(harcon)})");
+            Check(gadioton is { Outcome: "kill", Partial: true } && gadioton.PartialWhy.SequenceEqual(new[] { BossParser.KillUnseenWhy }) && !FightRecords.Counts(gadioton),
+                $"...a kill with under 97% of the boss's HP seen: partial, and no record's ({Say(gadioton)})");
+            Check(whole is { Outcome: "kill", Partial: false } && over is { Outcome: "kill", Partial: false },
+                $"...a whole kill stays whole, and so does one past the boss's HP ({Say(whole)}; {Say(over)})");
+        }
+
         // Combat Power beside every name (the live check, 2026-11-17: Talisra showed none for the Cleric and the Assassin, who
         // were in before Steven, and the Horn Den duo on his alt showed none for either): each member of every pull on these
         // recordings with the CP the game gave for them; the meter's rows say a member's CP only when there is one
@@ -2713,8 +2749,18 @@ public static class ParserTests
             q.Take(new DamageDealt(t.AddSeconds(2), 1, 90, 60_000, "Swoly", true));
             q.Take(new DamageDealt(t.AddSeconds(20), 1, 90, 60_000, "Swoly", true));
             var pull = q.AlwaysLive!;
-            Check(pull.Mode == "boss" && Math.Abs(pull.DpsSeconds(t.AddSeconds(31)) - pull.Duration(t.AddSeconds(31)).TotalSeconds) < 0.01,
-                $"...a boss pull is over the pull's own time ({pull.DpsSeconds(t.AddSeconds(31)):0} s)");
+            Check(pull.Mode == "boss" && Math.Abs(pull.DpsSeconds(t.AddSeconds(24)) - pull.Duration(t.AddSeconds(24)).TotalSeconds) < 0.01,
+                $"...a boss pull is over the pull's own time ({pull.DpsSeconds(t.AddSeconds(24)):0} s)");
+            // ...and once no damage has come for 5 s, held at its last damage plus 5 s (2026-11-21: on a wipe the figure fell
+            // through the minute of quiet, then jumped back up when the wipe ended the pull at its last damage)
+            double held = pull.GroupDps(t.AddSeconds(31)), later = pull.GroupDps(t.AddSeconds(79));
+            Check(Math.Abs(pull.DpsSeconds(t.AddSeconds(31)) - pull.Duration(t.AddSeconds(25)).TotalSeconds) < 0.01 && Math.Abs(held - later) < 0.01
+                  && Math.Abs(held - 120_000 / pull.Duration(t.AddSeconds(25)).TotalSeconds) < 0.01,
+                $"...quiet for 5 s, its DPS holds at its last damage + 5 s, a minute on too ({pull.DpsSeconds(t.AddSeconds(31)):0} s, {held:0}/s then {later:0}/s)");
+            q.Take(new DamageDealt(t.AddSeconds(40), 1, 90, 60_000, "Swoly", true));
+            var again = q.AlwaysLive!;
+            Check(Math.Abs(again.DpsSeconds(t.AddSeconds(42)) - again.Duration(t.AddSeconds(42)).TotalSeconds) < 0.01,
+                $"...and a hit again carries the clock on from now ({again.DpsSeconds(t.AddSeconds(42)):0} s)");
         }
         // the Kinah line's farming figure: never over less than 3 s (a mob killed in a second read 209.7K a second)
         {
