@@ -54,8 +54,10 @@ public partial class MainWindow
     /// the kills (players apart once the game told them apart), deaths and Kinah, which counts the bound Kinah there. The
     /// ring and the best here are a Kinah hour's, so they go. Out of the Abyss, or gathering there, the values stay the Kinah view's.
     /// </summary>
-    /// <summary>The Abyss's hours this session: the time in the places its points or Rank Points came from. What its rates divide by.</summary>
-    internal static double AbyssHours(SessionEngine e) => e.Zones.Values.Where(z => z.AbyssPoints > 0 || z.RankPoints > 0 || z.RankLost > 0).Sum(z => z.Seconds) / 3600;
+    /// <summary>The Abyss's hours this session: the farming time in the places its points or Rank Points came from. What its rates divide by.</summary>
+    /// (2026-11-21 audit: over the farming time there, as the Kinah hour is, and read from the locked snapshot: walking into a new
+    /// zone while the raw counters were read could throw)
+    internal static double AbyssHours(SessionEngine e) => e.ZoneSnapshot().Values.Where(z => z.AbyssPoints > 0 || z.RankPoints > 0 || z.RankLost > 0).Sum(z => z.Active) / 3600;
 
     /// <summary>An Abyss hour from its first minutes swings wildly: said as warming up until this long there.</summary>
     internal const double AbyssWarmMinutes = 3;
