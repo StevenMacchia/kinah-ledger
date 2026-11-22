@@ -126,6 +126,7 @@ sealed partial class HudModernLine : ModernLook
     readonly StackPanel _under = new() { HorizontalAlignment = HorizontalAlignment.Left };
     readonly TextBlock _note = Tt("", 11.5, Warn, FontWeights.SemiBold);
     Border? _rarePill;
+    FrameworkElement? _rareTile;
     TacSketch? _rareFx;
     double _ringShare, _ringPulse = -1, _pillFlash = -1, _rareTrace = -1, _chipPulse = -1;
     bool _ringBeat, _paused;
@@ -215,6 +216,7 @@ sealed partial class HudModernLine : ModernLook
 
         // the hour: the one big figure, its unit small after it; warming up smaller and quieter; nothing yet: the waiting line
         _rate.Inlines.Clear();
+        _rate.FontSize = !HasHour(f) ? 13 : f.Warm ? 15 : 22;   // the line's box at the size it shows (at 22 the waiting words' box overlapped the line under it)
         if (!HasHour(f)) _rate.Inlines.Add(R(Waiting(f.Abyss), 13, SoftB));
         else if (f.Warm) _rate.Inlines.Add(R(f.Rate, 15, DimB));
         else
@@ -289,7 +291,7 @@ sealed partial class HudModernLine : ModernLook
     void DrawUnder(Figures f)
     {
         _under.Children.Clear();
-        _rarePill = null; _rareFx = null;
+        _rarePill = null; _rareFx = null; _rareTile = null;
         if (KinahHidden) return;
         if (Rare(Values) is { } r)
         {
@@ -301,7 +303,8 @@ sealed partial class HudModernLine : ModernLook
             nm.Margin = new Thickness(0, -1, 0, 0);
             words.Children.Add(nm);
             var row = new StackPanel { Orientation = Orientation.Horizontal, Effect = ShadeFx };
-            row.Children.Add(Tile(r, 24)); row.Children.Add(words);
+            _rareTile = Tile(r, 24);
+            row.Children.Add(_rareTile); row.Children.Add(words);
             _rarePill = new Border { BorderBrush = Mod.Br(_rareC, .85), BorderThickness = new Thickness(1), Background = Wash, Padding = new Thickness(5, 4, 12, 4), Child = row };
             var rp = _rarePill;
             rp.SizeChanged += (_, _) => rp.CornerRadius = new CornerRadius(rp.ActualHeight / 2);
@@ -428,26 +431,8 @@ sealed partial class HudModernLine : ModernLook
         _fightFill.Child = _fightHost;
     }
 
-    /// <summary>The frame's moments: its hairline drawing itself round as a fight starts, a red flash round it on a wipe.</summary>
-    void DrawFrameFx(DrawingContext dc, Size s)
-    {
-        var r = new Rect(.5, .5, s.Width - 1, s.Height - 1);
-        if (r.Width <= 0 || r.Height <= 0) return;
-        if (_enter < 1)
-        {
-            double len = 2 * (r.Width + r.Height) - 8 * 12 + 2 * Math.PI * 12, t = Out(Seg(_enter, 0, .6));
-            var pen = new Pen(Mod.Br(WhiteC, .8), 1) { DashStyle = new DashStyle(new[] { Math.Max(.01, len * t), len * 2 }, 0) };
-            pen.Freeze();
-            dc.DrawGeometry(null, pen, Mod.Pill(r, 12));
-        }
-        if (_wipeFlash is > 0 and < 1)
-        {
-            double a = Math.Sin(Math.PI * Math.Min(1, _wipeFlash * 1.4)) * (1 - _wipeFlash * .3);
-            dc.DrawGeometry(null, Mod.P(Mod.Br(RedC0, .95 * a), 1.6), Mod.Pill(r, 12));
-            var inner = new Rect(r.X + 1.5, r.Y + 1.5, r.Width - 3, r.Height - 3);
-            dc.DrawGeometry(null, Mod.P(Mod.Br(RedC0, .35 * a), 2), Mod.Pill(inner, 10.5));
-        }
-    }
+    /// <summary>The frame's moment host: its parts (a comet of light, a flash of the frame) are on a layer of their own (ModernFx.cs), never drawn here.</summary>
+    static void DrawFrameFx(DrawingContext dc, Size s) { }
 
     protected override void DrawFight(Encounter? e, DateTime now)
     {
@@ -579,60 +564,215 @@ sealed partial class HudModernLine : ModernLook
     void ApplyEnter()
     {
         _fight.BorderBrush = _enter >= 1 ? EdgeB : Brushes.Transparent;
-        double up = Seg(_enter, .25, .7);
+        double up = Seg(_enter, .05, .4);
         for (int i = 0; i < _fightIn.Children.Count; i++)
         {
             var c = _fightIn.Children[i];
-            double p = _enter >= 1 ? 1 : Out(Seg(_enter, .2 + i * .08, .55 + i * .08));
+            double p = _enter >= 1 ? 1 : Out(Seg(_enter, .05 + i * .06, .35 + i * .06));
             c.Opacity = p;
             c.RenderTransform = p >= 1 ? null : new TranslateTransform(0, 5 * (1 - p));
         }
         _fight.Background = _enter >= 1 ? Wash : Mod.Br(Colors.Black, .2 * _k * up);
-        _frameFx.InvalidateVisual();
     }
 
     // ================================================================ the moments
+    //
+    // Line's moments are light running along its hairlines (2026-11-21, "cinematic ... keeping it light"): comets of light
+    // that trace an outline, outlines that ping out, a frame that flashes. Nothing fills, nothing glows over the words. A
+    // kill is drawn by light meeting at its chip; a wipe has no light at all: the frame flickers red and goes out. Each part
+    // is drawn once and moved by its transforms (Ui/Themes/Modern/ModernFx.cs); no frame or pill redraws.
 
-    /// <summary>A pickup: the pill's hairline brightens and the pickup's words rise into their place.</summary>
+    /// <summary>
+    /// A pickup, small and local: a comet runs once round the newest tile's outline and the outline pings out a few pixels;
+    /// the pill's hairline brightens and the pickup's words rise into their place.
+    /// </summary>
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _pillHost.Visibility != Visibility.Visible) return;
+        var pb = ModFx.In(_pill, _root);
+        var tile = NewestTile(_pill);
+        var tb = tile != null ? ModFx.In(tile, _root) : Rect.Empty;
+        Canvas? layer = null; FrameworkElement? lit = null, ping = null; ModFx.Comet? comet = null; ModFx.Xf? px = null;
+        if (!pb.IsEmpty)
+        {
+            layer = FxLayer("pickup", _root);
+            lit = ModFx.Put(layer, ModFx.Outline(pb, pb.Height / 2, WhiteC, 1.2, .5), pb.Left, pb.Top);
+            if (!tb.IsEmpty)
+            {
+                ping = ModFx.Put(layer, ModFx.Outline(tb, 5, WhiteC, 1.2), tb.Left, tb.Top); px = new ModFx.Xf(ping);
+                comet = new ModFx.Comet(layer, WhiteC, .7);
+            }
+        }
+        Point P(double v) => ModFx.OnRound(tb, 5, v);
         Motion.Play(_pillFx, 900, t =>
         {
-            _pillFlash = t; _pillFx.InvalidateVisual();
+            if (lit != null) lit.Opacity = ModFx.Bell(Seg(t, 0, .8));
+            comet?.At(P, ModFx.InOut(Seg(t, 0, .3)), .12, ModFx.Life(t, 0, .03, .27, .31));
+            if (px != null)
+            {
+                double q = Seg(t, .28, .7);
+                px.S.ScaleX = 1 + 8 * Out(q) / tb.Width; px.S.ScaleY = 1 + 8 * Out(q) / tb.Height;
+                ping!.Opacity = q <= 0 || q >= 1 ? 0 : .9 * (1 - q);
+            }
             double k = Out(Seg(t, 0, .45));
             _pick.Opacity = k; _pickShift.Y = 6 * (1 - k);
-        }, () => { _pillFlash = -1; _pillFx.InvalidateVisual(); _pick.Opacity = 1; _pickShift.Y = 0; });
+        }, () => { _pick.Opacity = 1; _pickShift.Y = 0; if (layer != null) FxDone("pickup", layer); });
     }
 
-    /// <summary>A rare drop: its pill's outline traces round in the grade's colour, a soft halo after.</summary>
+    /// <summary>
+    /// A rare drop, the big one, in its grade's colour: two bright comets of the colour draw its pill on, racing round from
+    /// opposite ways; where they meet the pill and its words light up, the tile punches with its outline flashing, and two
+    /// outlines of the colour ping out from it.
+    /// </summary>
     protected override void RareDrop(Pick p, bool held)
     {
-        if (_rareFx is not { } fx) return;
-        Motion.Play(fx, 1500, t => { _rareTrace = t; fx.InvalidateVisual(); }, () => { _rareTrace = -1; fx.InvalidateVisual(); });
+        if (_rarePill is not { } pill) return;
+        var rb = ModFx.In(pill, _root);
+        if (rb.IsEmpty) return;
+        var c = _rareC;
+        double rad = rb.Height / 2;
+        var layer = FxLayer("rare", _root);
+        var lit = ModFx.Put(layer, ModFx.Outline(rb, rad, c, 2, 1, Mod.Br(c, .16)), rb.Left, rb.Top);
+        var pings = new[] { .32, .46 }.Select(at => (At: at, El: (FrameworkElement)ModFx.Put(layer, ModFx.Outline(rb, rad, c, 1.6), rb.Left, rb.Top))).ToList();
+        var px = pings.Select(pg => new ModFx.Xf(pg.El)).ToList();
+        var tb = _rareTile != null ? ModFx.In(_rareTile, _root) : Rect.Empty;
+        FrameworkElement? tileLit = !tb.IsEmpty ? ModFx.Put(layer, ModFx.Outline(tb, 5, Mod.Mix(c, WhiteC, .4), 1.6), tb.Left, tb.Top) : null;
+        var a = new ModFx.Comet(layer, c, 1.4); var b = new ModFx.Comet(layer, c, 1.4);
+        Point A(double v) => ModFx.OnRound(rb, rad, v);
+        Point B(double v) => ModFx.OnRound(rb, rad, -v);
+        ModFx.Xf? tx = _rareTile != null ? new ModFx.Xf(_rareTile) : null;
+        var content = pill.Child as FrameworkElement;
+        Motion.Play(layer, 1600, t =>
+        {
+            double k = ModFx.InOut(Seg(t, 0, .3)), o = ModFx.Life(t, 0, .03, .3, .36);
+            a.At(A, .5 * k, .07, o); b.At(B, .5 * k, .07, o);
+            // the pill drawn on by them: its hairline and its words come up as they pass
+            pill.Opacity = Out(Seg(t, .05, .32));
+            if (content != null) content.Opacity = Seg(t, .2, .34);
+            lit.Opacity = ModFx.Life(t, .28, .34, .45, .9);
+            for (int i = 0; i < pings.Count; i++)
+            {
+                double q = Seg(t, pings[i].At, pings[i].At + .42);
+                px[i].S.ScaleX = 1 + 18 * Out(q) / rb.Width; px[i].S.ScaleY = 1 + 18 * Out(q) / rb.Height;
+                pings[i].El.Opacity = q <= 0 || q >= 1 ? 0 : (1 - q);
+            }
+            if (tileLit != null) tileLit.Opacity = ModFx.Life(t, .3, .34, .42, .7);
+            if (tx != null) tx.Scale = t < .3 ? 1 : ModFx.Punch(Seg(t, .3, .6), 1.3, 1.6);
+        }, () => { pill.Opacity = 1; if (content != null) content.Opacity = 1; if (tx != null) tx.Scale = 1; FxDone("rare", layer); });
     }
 
-    /// <summary>Your best passed: the ring goes mint and two rings ripple out from it.</summary>
+    /// <summary>
+    /// Your best passed: the ring holds white a beat, then a mint comet runs round it and turns it mint as it passes; the
+    /// ring punches, "New best" rises in, and one mint comet runs round the Buddy's pill and leaves its hairline lit.
+    /// </summary>
     protected override void BestPassed(bool held)
     {
         if (KinahHidden || _ringHost.Visibility != Visibility.Visible) return;
-        Motion.Play(_ring, 1300, t => { _ringPulse = t; _ring.InvalidateVisual(); }, () => { _ringPulse = -1; _ring.InvalidateVisual(); });
+        var rb = ModFx.In(_ringHost, _root); var pb = ModFx.In(_pill, _root);
+        if (rb.IsEmpty || pb.IsEmpty) return;
+        var layer = FxLayer("best", _root);
+        var mid = new Point(rb.Left + rb.Width / 2, rb.Top + rb.Height / 2);
+        double rr = (rb.Width - 3.5) / 2;
+        var ringComet = new ModFx.Comet(layer, MintC0, .9);
+        var lit = ModFx.Put(layer, ModFx.Outline(pb, pb.Height / 2, MintC0, 1.2, .8), pb.Left, pb.Top);
+        var comet = new ModFx.Comet(layer, MintC0, .9);
+        double rad = pb.Height / 2, u0 = ModFx.TopAt(pb, rad, mid.X);
+        Point R(double v) { double a = 2 * Math.PI * v; return new Point(mid.X + rr * Math.Sin(a), mid.Y - rr * Math.Cos(a)); }
+        Point P(double v) => ModFx.OnRound(pb, rad, v);
+        var hx = new ModFx.Xf(_ringHost);
+        bool beat = _ringBeat; double share = _ringShare;
+        var star = _ringText.Text; var starTone = _ringText.Foreground; var starSize = _ringText.FontSize;
+        Motion.Play(_ring, 1500, t =>
+        {
+            // the hold: white, the share as it was; then the comet's lap turns it mint behind it
+            double lap = ModFx.InOut(Seg(t, .08, .36));
+            _ringBeat = t >= .08; _ringShare = t < .08 ? Math.Min(.97, share is > 0 and < 1 ? share : .9) : lap;
+            _ring.InvalidateVisual();
+            ringComet.At(R, lap, .1, ModFx.Life(t, .08, .1, .34, .38));
+            bool done = t >= .36;
+            _ringText.Text = done ? star : Pct(Math.Min(.97, share is > 0 and < 1 ? share : .9));
+            _ringText.Foreground = done ? starTone : WhiteB; _ringText.FontSize = done ? starSize : 13;
+            hx.Scale = 1 + .14 * ModFx.Bell(Out(Seg(t, .36, .58)));
+            double up = Out(Seg(t, .38, .55));
+            _pick.Opacity = up; _pickShift.Y = 6 * (1 - up);
+            comet.At(P, u0 + ModFx.InOut(Seg(t, .4, .88)), .045, ModFx.Life(t, .4, .44, .84, .88));
+            lit.Opacity = ModFx.Life(t, .45, .65, .85, .98);
+        }, () =>
+        {
+            _ringBeat = beat; _ringShare = share; _ring.InvalidateVisual();
+            _ringText.Text = star; _ringText.Foreground = starTone; _ringText.FontSize = starSize;
+            hx.Scale = 1; _pick.Opacity = 1; _pickShift.Y = 0;
+            FxDone("best", layer);
+        });
     }
 
-    /// <summary>An entry opened: the timer chip's outline pulses out twice in mint.</summary>
+    /// <summary>An entry opened: the timer chip arrives with a punch, a mint comet runs once round it, and two mint outlines ping out from it.</summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
-        if (_chipFx is not { } fx) return;
-        Motion.Play(fx, 1400, t => { _chipPulse = t; fx.InvalidateVisual(); }, () => { _chipPulse = -1; fx.InvalidateVisual(); });
+        if (_chip is not { } chip) return;
+        var cb = ModFx.In(chip, _root);
+        if (cb.IsEmpty) return;
+        var layer = FxLayer("entry", _root);
+        double rad = cb.Height / 2;
+        var comet = new ModFx.Comet(layer, MintC0, .8);
+        Point P(double v) => ModFx.OnRound(cb, rad, v);
+        var pings = new[] { .36, .52 }.Select(at => (At: at, El: (FrameworkElement)ModFx.Put(layer, ModFx.Outline(cb, rad, MintC0, 1.4), cb.Left, cb.Top))).ToList();
+        var px = pings.Select(pg => new ModFx.Xf(pg.El)).ToList();
+        var cx = new ModFx.Xf(chip);
+        Motion.Play(layer, 1300, t =>
+        {
+            cx.Scale = ModFx.Punch(Seg(t, 0, .3), .84, 2.2);
+            chip.Opacity = .2 + .8 * Seg(t, 0, .08);
+            comet.At(P, ModFx.InOut(Seg(t, .08, .55)), .1, ModFx.Life(t, .08, .12, .5, .56));
+            for (int k = 0; k < pings.Count; k++)
+            {
+                double q = Seg(t, pings[k].At, pings[k].At + .42);
+                px[k].S.ScaleX = 1 + 12 * Out(q) / cb.Width; px[k].S.ScaleY = 1 + 12 * Out(q) / cb.Height;
+                pings[k].El.Opacity = q <= 0 || q >= 1 ? 0 : .95 * (1 - q);
+            }
+        }, () => { cx.Scale = 1; chip.Opacity = 1; FxDone("entry", layer); });
     }
 
-    /// <summary>A fight started: the frame's hairline draws itself round and the head, the HP and the rows come up one after another.</summary>
+    /// <summary>
+    /// A fight started: two comets leave the frame's top middle and race round it both ways to meet at its foot, the
+    /// hairline coming up behind them; the head, the HP and the rows come up one after another as they run.
+    /// </summary>
     protected override void FightStarted(Encounter e, bool held)
     {
-        Motion.Play(_fightHost, 900, t => { _enter = t; ApplyEnter(); }, () => { _enter = 1; ApplyEnter(); });
+        var fb = ModFx.In(_fight, _root);
+        Canvas? layer = null; FrameworkElement? frame = null; ModFx.Comet? a = null, b = null;
+        var litStop = new GradientStop(Colors.Black, 0); var darkStop = new GradientStop(Colors.Transparent, .001);
+        double u0 = 0;
+        if (!fb.IsEmpty)
+        {
+            layer = FxLayer("start", _root);
+            frame = ModFx.Put(layer, ModFx.Outline(fb, 12, WhiteC, 1, .45), fb.Left, fb.Top);
+            // the hairline comes up behind the comets: a mask whose lit part follows them down
+            var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+            mask.GradientStops.Add(litStop); mask.GradientStops.Add(darkStop);
+            frame.OpacityMask = mask;
+            a = new ModFx.Comet(layer, WhiteC); b = new ModFx.Comet(layer, WhiteC);
+            u0 = ModFx.TopAt(fb, 12, fb.Left + fb.Width / 2);
+        }
+        Point A(double v) => ModFx.OnRound(fb, 12, v);
+        Point B(double v) => ModFx.OnRound(fb, 12, 2 * u0 - v);
+        Motion.Play(_fightHost, 1000, t =>
+        {
+            _enter = t; ApplyEnter();
+            if (layer == null) return;
+            double k = ModFx.InOut(Seg(t, 0, .5)), o = ModFx.Life(t, 0, .04, .48, .56);
+            a!.At(A, u0 + .5 * k, .05, o); b!.At(B, u0 + .5 * k, .05, o);
+            double y = Math.Clamp((A(u0 + .5 * k).Y - fb.Top) / fb.Height, 0, 1);
+            litStop.Offset = t >= .5 ? 1 : Math.Max(0, y - .03); darkStop.Offset = t >= .5 ? 1 : Math.Min(1, y + .03);
+        }, () => { _enter = 1; ApplyEnter(); if (layer != null) FxDone("start", layer); });
     }
 
-    /// <summary>A fight ended: a kill stamps its chip and runs a light along the top row's bar; a wipe flashes the frame red.</summary>
+    /// <summary>
+    /// A fight ended. A kill: two mint comets race round the frame from its foot both ways and meet at the outcome's chip,
+    /// which lands there with a punch and a ping of its outline; the frame stays lit a moment and a light runs along the top
+    /// row's bar. A wipe has no light: its chip slams down without a bounce, the frame flickers red twice and goes out
+    /// slowly, and the rows dim for a moment.
+    /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
         if (e.Outcome is not ("kill" or "wipe" or "cleared")) return;
@@ -641,21 +781,78 @@ sealed partial class HudModernLine : ModernLook
         var st = new ScaleTransform(1, 1);
         if (chip != null) { chip.RenderTransformOrigin = new Point(.5, .5); chip.RenderTransform = st; }
         var top = !wipe && Meter is { Members.Count: > 0 } m ? m.RowOf(m.Members[0].Id) as LineRow : null;
-        Motion.Play(_frameFx, 1600, t =>
+        var rows = RowRoots();
+        var fb = ModFx.In(_fight, _root);
+        var cb = chip != null ? ModFx.In(chip, _root) : Rect.Empty;
+        Canvas? layer = null; FrameworkElement? lit = null, ping = null; ModFx.Comet? ca = null, cbm = null; ModFx.Xf? px = null;
+        var darkStop = new GradientStop(Colors.Transparent, 1); var litStop = new GradientStop(Colors.Black, 1);
+        double u0 = 0;
+        // a wipe's frame sits in the frame's own host
+        var flash = new List<Border>();
+        if (wipe)
         {
-            if (chip != null)
+            flash.Add(new Border { CornerRadius = new CornerRadius(12), BorderBrush = Mod.Br(RedC0, .95), BorderThickness = new Thickness(1.6), IsHitTestVisible = false, Opacity = 0 });
+            flash.Add(new Border { CornerRadius = new CornerRadius(10.5), BorderBrush = Mod.Br(RedC0, .35), BorderThickness = new Thickness(2), Margin = new Thickness(1.5), Background = Mod.Br(RedC0, .07), IsHitTestVisible = false, Opacity = 0 });
+            foreach (var fl in flash) _fightHost.Children.Add(fl);
+        }
+        else if (!fb.IsEmpty)
+        {
+            layer = FxLayer("end", _root);
+            lit = ModFx.Put(layer, ModFx.Outline(fb, 12, MintC0, 1.4, .9), fb.Left, fb.Top);
+            // the frame lights mint behind the comets as they climb: a mask whose lit part follows them up
+            var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+            mask.GradientStops.Add(darkStop); mask.GradientStops.Add(litStop);
+            lit.OpacityMask = mask;
+            ca = new ModFx.Comet(layer, MintC0, 1.4); cbm = new ModFx.Comet(layer, MintC0, 1.4);
+            u0 = ModFx.TopAt(fb, 12, cb.IsEmpty ? fb.Right - 40 : cb.Left + cb.Width / 2);
+            if (!cb.IsEmpty) { ping = ModFx.Put(layer, ModFx.Outline(cb, cb.Height / 2, MintC0, 1.4), cb.Left, cb.Top); px = new ModFx.Xf(ping); }
+        }
+        Point Fw(double v) => ModFx.OnRound(fb, 12, v);
+        Point Bw(double v) => ModFx.OnRound(fb, 12, -v);
+        Motion.Play(_frameFx, 1800, t =>
+        {
+            if (wipe)
             {
-                double s = 1.35 - .35 * Back(Seg(t, 0, .25), 1.4);
-                st.ScaleX = st.ScaleY = s;
-                chip.Opacity = Seg(t, 0, .12);
+                if (chip != null) { st.ScaleX = st.ScaleY = 1.6 - .6 * ModFx.In(Seg(t, 0, .08)); chip.Opacity = Seg(t, 0, .05); }
+                // two hard flickers, then a slow going out
+                double a = t switch { < .05 => 0, < .09 => 1, < .12 => 0, < .16 => 1, < .19 => .15, _ => 1 - Seg(t, .19, .85) };
+                foreach (var fl in flash) fl.Opacity = a;
+                foreach (var r in rows) r.Opacity = 1 - .45 * ModFx.Life(t, .05, .09, .2, .25);
             }
-            if (wipe) { _wipeFlash = t; _frameFx.InvalidateVisual(); }
-            if (top != null) top.SetGlint(Seg(t, .15, .75));
+            else
+            {
+                if (ca != null)
+                {
+                    // the comets climb from the foot both ways and meet at the chip by a third; the frame lit behind them,
+                    // then the whole of it flashes at the meeting and eases out
+                    double k = ModFx.InOut(Seg(t, 0, .32)), o = ModFx.Life(t, 0, .03, .3, .35);
+                    ca.At(Bw, -(u0 + .5) + .5 * k, .06, o);
+                    cbm!.At(Fw, u0 + .5 + .5 * k, .06, o);
+                    double y = Math.Clamp((Fw(u0 + .5 + .5 * k).Y - fb.Top) / fb.Height, 0, 1);
+                    bool met = t >= .32;
+                    darkStop.Offset = met ? 0 : Math.Max(0, y - .04); litStop.Offset = met ? .001 : Math.Min(1, y + .04);
+                    lit!.Opacity = t < .32 ? .7 * Seg(t, 0, .04) : t < .34 ? 1 : 1 - Out(Seg(t, .34, .5));
+                }
+                if (chip != null)
+                {
+                    st.ScaleX = st.ScaleY = t < .32 ? 1.15 : 1.15 - .15 * Back(Seg(t, .32, .52), 1.6);
+                    chip.Opacity = Seg(t, .3, .34);
+                }
+                if (px != null)
+                {
+                    double q = Seg(t, .32, .68);
+                    px.S.ScaleX = 1 + 10 * Out(q) / cb.Width; px.S.ScaleY = 1 + 10 * Out(q) / cb.Height;
+                    ping!.Opacity = q <= 0 || q >= 1 ? 0 : 1 - q;
+                }
+                if (top != null) top.SetGlint(Seg(t, .34, .8));
+            }
         }, () =>
         {
             if (chip != null) { st.ScaleX = st.ScaleY = 1; chip.Opacity = 1; }
-            _wipeFlash = -1; _frameFx.InvalidateVisual();
+            foreach (var fl in flash) _fightHost.Children.Remove(fl);
+            foreach (var r in rows) r.Opacity = 1;
             top?.SetGlint(-1);
+            if (layer != null) FxDone("end", layer);
         });
     }
 }

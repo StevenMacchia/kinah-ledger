@@ -97,6 +97,60 @@ abstract class ModernLook : HudThemeLook
     protected List<FrameworkElement> RunStrips(PickStrip.Look look) =>
         PickStrip.Shown && Picks(Values).Any() && PickStrip.Of(Values, look) is { } s ? new List<FrameworkElement> { s } : new List<FrameworkElement>();
 
+    // ---- the moments' layers (Ui/Themes/Modern/ModernFx.cs)
+
+    readonly Dictionary<string, (Panel Host, Canvas Layer)> _fx = new();
+
+    /// <summary>
+    /// A fresh layer for a moment's parts on top of <paramref name="host"/> (a look's root: the parts are placed with
+    /// <see cref="ModFx.In"/>), clipped to <paramref name="clip"/> when given. The layer the same moment left before (a course
+    /// cut short by the next one never runs its end) goes first, so nothing is ever left standing. <paramref name="at"/>: its
+    /// place among the host's children (under the words, say), else on top.
+    /// </summary>
+    protected Canvas FxLayer(string key, Panel host, Geometry? clip = null, int at = -1)
+    {
+        if (_fx.Remove(key, out var old)) old.Host.Children.Remove(old.Layer);
+        // never past the window's edge: the layer ends where the window does (the root's margin is its room)
+        if (Root.ActualWidth > 0 && (ReferenceEquals(host, Root) || host.IsDescendantOf(Root)))
+        {
+            var m = Inset;
+            var o = ReferenceEquals(host, Root) ? new Point(-m.Left, -m.Top) : Root.TranslatePoint(new Point(-m.Left, -m.Top), host);
+            var win = new RectangleGeometry(new Rect(o.X, o.Y, Root.ActualWidth + m.Left + m.Right, Root.ActualHeight + m.Top + m.Bottom));
+            clip = clip == null ? win : new CombinedGeometry(GeometryCombineMode.Intersect, win, clip);
+            clip.Freeze();
+        }
+        var c = new Canvas { IsHitTestVisible = false, Clip = clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        if (at >= 0 && at <= host.Children.Count) host.Children.Insert(at, c); else host.Children.Add(c);
+        _fx[key] = (host, c);
+        return c;
+    }
+
+    /// <summary>The moment's layer taken away at its end (unless a newer one of the same moment replaced it).</summary>
+    protected void FxDone(string key, Canvas layer)
+    {
+        if (_fx.TryGetValue(key, out var v) && ReferenceEquals(v.Layer, layer)) { v.Host.Children.Remove(layer); _fx.Remove(key); }
+        else if (layer.Parent is Panel p) p.Children.Remove(layer);
+    }
+
+    /// <summary>The meter's rows as shown, top first (their roots: a moment may set their opacity, never their transform: ThemeRows glides them by it).</summary>
+    protected List<FrameworkElement> RowRoots() =>
+        Meter?.Members.Select(m => Meter.RowOf(m.Id)?.Root).OfType<FrameworkElement>().Where(r => r.IsVisible || r.Visibility == Visibility.Visible).ToList() ?? new();
+
+    /// <summary>The pickup strip's newest tile (Ui/HudPickStrip.cs tags it "pick-tile", newest first) under <paramref name="under"/>, or null.</summary>
+    protected static FrameworkElement? NewestTile(DependencyObject under)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(under); i++)
+        {
+            var c = VisualTreeHelper.GetChild(under, i);
+            if (c is FrameworkElement fe && fe.Tag as string == "pick-tile" && fe.IsVisible) return fe;
+            if (NewestTile(c) is { } found) return found;
+        }
+        return null;
+    }
+
+    /// <summary>A rounded clip in a layer's coordinates.</summary>
+    protected static Geometry ClipOf(Rect r, double radius) => Mod.Pill(r, radius);
+
     /// <summary>A text in Inter (or <paramref name="face"/>), tabular digits, never cut.</summary>
     protected static TextBlock Tt(string s, double size, Brush fg, FontWeight weight, FontFamily? face = null) => Mod.Text(s, size, fg, weight, face);
 }
