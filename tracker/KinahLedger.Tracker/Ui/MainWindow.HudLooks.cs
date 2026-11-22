@@ -50,7 +50,7 @@ public partial class MainWindow
     /// <summary>
     /// The overlay in the Abyss (Steven, 2026-11-15: "when in the abyss use that to track your Abyss pts per hour and show
     /// relevant stats like in the app itself for the abyss"), from the figures the Farming page shows there (FillRate,
-    /// FillChips): "rate" is the Abyss Points hour the hero says (warming up with it), "total" the points picked up, then
+    /// FillChips): "rate" is the Abyss Points hour the hero says, "total" the points picked up, then
     /// the kills (players apart once the game told them apart), deaths and Kinah, which counts the bound Kinah there. The
     /// ring and the best here are a Kinah hour's, so they go. Out of the Abyss, or gathering there, the values stay the Kinah view's.
     /// </summary>
@@ -65,9 +65,13 @@ public partial class MainWindow
         return (active >= 60 ? active : abyss.Sum(z => z.Seconds)) / 3600;
     }
 
-    /// <summary>An Abyss hour from its first minutes swings wildly: said as warming up until this long there.</summary>
-    internal const double AbyssWarmMinutes = 3;
-    internal static bool AbyssWarming(double abyssHours) => abyssHours * 60 < AbyssWarmMinutes;
+    /// <summary>
+    /// The Abyss hour shows from the first point, no warming up (Steven, 2026-11-22: "stop the warm up in the abyss": walking
+    /// in started the count over and its hour read "warming up" for 3 minutes of kills). Over at least a minute, so the first
+    /// kill's points don't read as tens of thousands an hour; past a minute it is the time there.
+    /// </summary>
+    internal const double AbyssRateFloorMinutes = 1;
+    internal static double AbyssRateOver(double abyssHours) => Math.Max(abyssHours, AbyssRateFloorMinutes / 60);
 
     void HudAbyssValues(SessionEngine e, double h, long kinah, int kills, bool on)
     {
@@ -76,9 +80,10 @@ public partial class MainWindow
         long ap = e.AbyssPoints;
         _hudValues["abyss"] = "1";
         // over the time in the Abyss, not the session's (Steven, 2026-11-21: 285 points in a minute there read 605 an hour,
-        // the half hour mining before it in the hour too); warming up its first minutes there
-        double abH = AbyssHours(e);
-        _hudValues["rate"] = ap <= 0 ? "" : AbyssWarming(abH) ? WarmingUp : Fk(ap / abH);
+        // the half hour mining before it in the hour too); never warming up there (AbyssRateOver)
+        double abH = AbyssRateOver(AbyssHours(e));
+        _hudValues["warm"] = "";
+        _hudValues["rate"] = ap <= 0 ? "" : Fk(ap / abH);
         _hudValues["total"] = ap > 0 ? Fk(ap) : "";
         _hudValues["chase"] = _hudValues["toBest"] = _hudValues["best"] = "";
         _hudValues["abPvp"] = e.PlayerKills + e.MonsterKills > 0 ? e.PlayerKills.ToString("N0") : "";

@@ -965,8 +965,8 @@ public static partial class WpfApp
             && !MainWindow.RateWarm(TimeSpan.FromSeconds(60), 18) && !MainWindow.RateWarm(TimeSpan.FromMinutes(2), 3) && MainWindow.RateWarm(TimeSpan.FromMinutes(5), 2),
             "warming up: under 30 s or under 6 counted (2 minutes with 3 is enough); 18 pickups in a minute show the rate");
         // the Abyss's hour is over the time there (Steven, 2026-11-21: 285 points in a minute read 605 an hour over a half hour
-        // of mining before it), warming up its first 3 minutes there
-        Check(MainWindow.AbyssWarming(1 / 60.0) && MainWindow.AbyssWarming(2.9 / 60) && !MainWindow.AbyssWarming(3.1 / 60), "the Abyss hour warms up for its first 3 minutes there");
+        // of mining before it); never warming up there (Steven, 2026-11-22), over at least a minute so the first kill isn't a spike
+        Check(MainWindow.AbyssRateOver(2 / 3600.0) == 1 / 60.0 && MainWindow.AbyssRateOver(.5) == .5, "the Abyss hour: no warming up, over at least a minute there");
 
         // the Abyss (Steven, 2026-11-13: "in abyss zones the primary should be abyss points per hour and a secondary ticket
         // for kinah"): the sample's 118 kills paid 24,740 Abyss Points in 42 min 17 s, so the hero is their hour and Kinah and

@@ -340,8 +340,8 @@ public partial class MainWindow
         _heroAbyss = ap;
         long hero = ap ? abyss : total;
         // the points' hour is over the time in the Abyss (AbyssHours), the Kinah hour over the session's
-        double rh = ap ? Math.Max(AbyssHours(e), 1e-6) : h;
-        bool warming = ap ? AbyssWarming(rh) : _rateWarming;
+        double rh = ap ? AbyssRateOver(AbyssHours(e)) : h;
+        bool warming = !ap && _rateWarming;   // the Abyss hour never warms up (AbyssRateOver)
         // it rolls when the count under it moved (a pickup), not as the hour ticks on; green when it rose 1% (not warming up)
         bool counted = hero != _heroTotal; _heroTotal = hero;
         // keyed apart in the Abyss, so walking in doesn't roll the Kinah hour down into the points'
