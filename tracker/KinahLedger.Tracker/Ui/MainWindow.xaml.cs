@@ -1098,6 +1098,8 @@ public partial class MainWindow : Window
         // in the Abyss every Kinah drop is bound (Steven, 2026-11-13: "kinah and abyss points are not being properly tracked"):
         // its Kinah figures count the bound Kinah too; out of it bound Kinah stays reward money, left out
         bool inAbyss = ZoneLocator.IsAbyss(_demo ? _demoZone : e.Zone ?? _watcher.Chat?.ZoneView?.Zone);
+        // no warming up in the Abyss, its Kinah and loot either (Steven, 2026-11-22: "stop the warm up in the abyss")
+        if (inAbyss) _rateWarming = false;
         // (the engine counts a kill's bound Kina as Kinah in the Abyss's zones since 0.10.69: SessionEngine.IsAbyssKillKina)
         _boundInKinah = inAbyss && e.AbyssBoundKinah > 0;
         var s = Build(e, h, t.Kills);
