@@ -124,7 +124,7 @@ sealed partial class HudFinals : ModernLook
     {
         _lineRow.Children.Clear();
         while (_lineBody.Children.Count > 0) _lineBody.Children.RemoveAt(0);
-        _medal = null; _rareRing = null; _rareTileEl = null; _stripEl = null; _timerUp = false; _stripTimerW = -1;
+        _medal = null; _rareRing = null; _rareTileEl = null; _stripEl = null; _rareRow = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
         _lineBody.Opacity = _dim ? .62 : 1;
@@ -258,6 +258,7 @@ sealed partial class HudFinals : ModernLook
         w.Children.Add(nm);
         rr.Children.Add(w);
         _lineBody.Children.Add(rr);
+        _rareRow = rr;
     }
 
     /// <summary>The notice under the Buddy: its words in their tone on a small black plate, the warning sign before a pause.</summary>
@@ -514,7 +515,7 @@ sealed partial class HudFinals : ModernLook
     /// <summary>The four-point glint (a trophy's shine), drawn once, scaled and turned by the moments.</summary>
     static readonly Geometry SparkGeo = Geometry.Parse("M 7,0 C 7.6,5 9,6.4 14,7 C 9,7.6 7.6,9 7,14 C 6.4,9 5,7.6 0,7 C 5,6.4 6.4,5 7,0 Z");
     System.Windows.Shapes.Path? _firstSpark;
-    FrameworkElement? _rareTileEl, _stripEl;
+    FrameworkElement? _rareTileEl, _stripEl, _rareRow;
 
     /// <summary>
     /// A pickup: a band of gold light sweeps the Buddy's plate and the worth comes in on a small black-and-gold ticket at the
@@ -526,34 +527,32 @@ sealed partial class HudFinals : ModernLook
         _lineGlint.Tint(AuPaleC, .32);
         Motion.Play(_lineGlint, 1100, t => _lineGlint.At(t), () => _lineGlint.At(-1));
         var worth = p.Worth.Length > 0 ? "+" + p.Worth.TrimStart('+') : p.Count;
-        var words = new StackPanel();
-        words.Children.Add(T(worth, 16, p.Worth.Length > 0 ? GoldInk : White, FontWeights.SemiBold, cond: true));
-        var nm = T(p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name, 10.5, Soft, FontWeights.SemiBold); nm.Margin = new Thickness(0, -3, 0, 0);
-        words.Children.Add(nm);
+        // one line on a ticket hung on the plate's top rim at its right end, over the lamps: the strip under it stays in view
+        var line = T(worth, 13.5, p.Worth.Length > 0 ? GoldInk : White, FontWeights.SemiBold, cond: true);
+        line.Inlines.Add(new System.Windows.Documents.Run("  " + (p.Name.Length > 13 ? p.Name[..12].TrimEnd() + "…" : p.Name)) { FontSize = 10.5, Foreground = Soft });
+        line.TextTrimming = TextTrimming.CharacterEllipsis;
         var ticket = new Border
         {
-            Child = words, Background = Mod.Br(Black0, .94), BorderBrush = GoldMetal, BorderThickness = new Thickness(1.2), CornerRadius = new CornerRadius(3),
-            Padding = new Thickness(8, 2, 9, 3), MaxWidth = 96, IsHitTestVisible = false,
+            Child = line, Background = Mod.Br(Black0, .96), BorderBrush = GoldMetal, BorderThickness = new Thickness(1.2), CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(7, 0, 8, 1), MaxWidth = 150, IsHitTestVisible = false,
         };
-        var anchor = new Canvas { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
+        var anchor = new Canvas { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false };
         ticket.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        Canvas.SetLeft(ticket, -ticket.DesiredSize.Width - 10); Canvas.SetTop(ticket, -ticket.DesiredSize.Height / 2);
+        Canvas.SetLeft(ticket, -ticket.DesiredSize.Width - 14); Canvas.SetTop(ticket, -5);
         var sh = new TranslateTransform();
         var sc = new ScaleTransform(1, 1);
-        ticket.RenderTransformOrigin = new Point(1, .5);
+        ticket.RenderTransformOrigin = new Point(1, 0);
         ticket.RenderTransform = new TransformGroup { Children = { sc, sh } };
         anchor.Children.Add(ticket);
         _line.Children.Add(anchor);
-        // the strip makes way under the ticket (gone while it shows, back as it leaves: never two words over each other)
-        var strip = _stripEl;
         Motion.Play(ticket, 1800, t =>
         {
-            double k = Seg(t, .1, .26), o = Seg(t, .8, .9);
-            sh.X = 18 * (1 - Out(k)) + 10 * o;
-            sc.ScaleX = sc.ScaleY = EsportsFx.Punch(k, .8, 2.2);
-            ticket.Opacity = t < .8 ? Out(k) : 1 - o;
-            if (strip != null) strip.Opacity = t < .8 ? 1 - Seg(t, 0, .09) : Seg(t, .89, 1);
-        }, () => { _line.Children.Remove(anchor); if (strip != null) strip.Opacity = 1; });
+            // slid out from the plate's right end, a touch big and settling, held, then tucked back in
+            double k = Seg(t, .1, .28), o = Seg(t, .82, 1);
+            sh.X = 16 * (1 - Out(k)) + 16 * o * o;
+            sc.ScaleX = sc.ScaleY = EsportsFx.Punch(k, .75, 2.4);
+            ticket.Opacity = t < .82 ? Out(k) : 1 - o;
+        }, () => _line.Children.Remove(anchor));
     }
 
     /// <summary>
@@ -568,6 +567,9 @@ sealed partial class HudFinals : ModernLook
         var tile = _rareTileEl;
         var tsc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = tsc; }
+        var row = _rareRow;
+        var rise = new TranslateTransform();
+        if (row != null) row.RenderTransform = rise;
         if (ring.Parent is Grid host)
             EsportsFx.Spray(host, new Point(host.Width / 2, 18), 10, 30, -200, 20, new[] { Mod.Mix(c, Colors.White, .25), Colors.White, c }, 1100, fall: 10, delay: .12, sparks: true);
         Motion.Play(ring, 1500, t =>
@@ -576,9 +578,11 @@ sealed partial class HudFinals : ModernLook
             sc.ScaleX = 1 + .38 * Out(k); sc.ScaleY = 1 + .26 * Out(k);
             ring.Opacity = k is > 0 and < 1 ? 1 - k : 0;
             tsc.ScaleX = tsc.ScaleY = t < .02 ? 1.8 : EsportsFx.Punch(Seg(t, .02, .3), 1.8, 2.6);
-            if (tile != null) tile.Opacity = Math.Min(1, Seg(t, 0, .1) * 1.6);
+            if (tile != null) tile.Opacity = Math.Min(1, Seg(t, .04, .1) * 1.6);
+            // the whole line rises into place first (no empty slot showing before it lands)
+            if (row != null) { row.Opacity = Seg(t, 0, .06); rise.Y = 6 * (1 - Out(Seg(t, 0, .16))); }
             _lineGlint.At(Seg(t, .1, .9));
-        }, () => { ring.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; tsc.ScaleX = tsc.ScaleY = 1; if (tile != null) tile.Opacity = 1; _lineGlint.At(-1); });
+        }, () => { ring.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; tsc.ScaleX = tsc.ScaleY = 1; if (tile != null) tile.Opacity = 1; if (row != null) { row.Opacity = 1; rise.Y = 0; } _lineGlint.At(-1); });
     }
 
     /// <summary>
@@ -605,7 +609,7 @@ sealed partial class HudFinals : ModernLook
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -3, -3, 0), RenderTransformOrigin = new Point(.5, .5) };
             glint.RenderTransform = new TransformGroup { Children = { gsc, gturn } };
             medal.Children.Add(glint);
-            EsportsFx.Spray(medal, new Point(23, 21), 12, 32, -180, 180, new[] { AuLightC, Colors.White, AuPaleC, AuC }, 1200, fall: 8, delay: .5, sparks: true);
+            EsportsFx.Spray(medal, new Point(23, 2), 12, 30, 15, 165, new[] { AuLightC, Colors.White, AuPaleC, AuC }, 1300, fall: 22, delay: .5);
         }
         Motion.Play(art, 1900, t =>
         {
@@ -743,9 +747,10 @@ sealed partial class HudFinals : ModernLook
         // a wipe: the house lights go down. The stage dims under a dark wash, the lights sag, and the plate falls in heavy and
         // bounces once on the head; no gold, no flash, no confetti (the champion's moment is the opposite)
         Border? dark = null;
+        var wrows = wipe ? ShownRows().ToList() : new List<FinalsRow>();
         if (wipe)
         {
-            dark = new Border { Background = Mod.Br(Black0, .5), CornerRadius = new CornerRadius(Radius), IsHitTestVisible = false, Opacity = 0 };
+            dark = new Border { Background = Mod.Br(Black0, .42), BorderBrush = Mod.Br(CoralC, .8), BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(Radius), IsHitTestVisible = false, Opacity = 0 };
             _fight.Children.Insert(_fight.Children.IndexOf(_fightFx), dark);
             _lineGlint.Tint(CoralC, .22);
         }
@@ -758,13 +763,15 @@ sealed partial class HudFinals : ModernLook
                 double fl = Seg(t, 0, .13);
                 drop.Y = t < .13 ? -12 * (1 - fl * fl) : -5 * Math.Abs(Math.Sin(Math.PI * Seg(t, .13, .25))) * (1 - Seg(t, .13, .25));
                 sc.ScaleX = 1 + (t is > .12 and < .17 ? .04 : 0); sc.ScaleY = 1 - (t is > .12 and < .17 ? .08 : 0);
-                if (dark != null) dark.Opacity = t < .12 ? Seg(t, 0, .12) : 1 - Out(Seg(t, .22, .62));
-                _beams.Opacity = 1 - .7 * Math.Sin(Math.PI * Seg(t, .02, .7));
+                if (dark != null) dark.Opacity = t < .12 ? Seg(t, 0, .12) : 1 - Out(Seg(t, .18, .4));
+                // the lights flicker off (on, half, gone) and come back slowly once the plate has landed
+                _beams.Opacity = t < .03 ? 1 : t < .06 ? .3 : t < .09 ? .85 : t < .12 ? .25 : t < .5 ? .08 : .08 + .92 * Out(Seg(t, .5, .85));
+                for (int r = 0; r < wrows.Count; r++) wrows[r].Root.Opacity = t < .14 ? 1 - .4 * Seg(t, .06, .14) : .6 + .4 * Out(Seg(t, .3 + (wrows.Count - 1 - r) * .05, .55 + (wrows.Count - 1 - r) * .05));
                 _settle.Y = EsportsFx.Shake(t, .13, .3, 2.5, 2);
                 return;
             }
             // the plate slams down from above, overshooting, a white-gold flash on impact, then a light runs across it
-            drop.Y = -16 * (1 - Math.Min(1.06, Back(i, 2.4)));
+            drop.Y = -16 * (1 - Math.Min(1.06, Back(i, 2.4))) - 6 * o;
             sc.ScaleX = sc.ScaleY = 1.14 - .14 * Out(i);
             double f = Seg(t, .07, .2);
             flash.Opacity = f is > 0 and < 1 ? .85 * (1 - f) : 0;
@@ -772,7 +779,7 @@ sealed partial class HudFinals : ModernLook
         }, () =>
         {
             _fightFx.Children.Clear(); _plateUp = false; if (_head != null) _head.Visibility = Visibility.Visible;
-            if (dark != null) { _fight.Children.Remove(dark); _beams.Opacity = 1; _settle.Y = 0; }
+            if (dark != null) { _fight.Children.Remove(dark); _beams.Opacity = 1; _settle.Y = 0; foreach (var r in wrows) r.Root.Opacity = 1; }
         });
         if (wipe) return;
         // the panel's size as laid out (or, not laid out yet in a render's held frame, as it measures)

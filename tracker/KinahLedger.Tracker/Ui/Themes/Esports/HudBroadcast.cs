@@ -818,18 +818,24 @@ sealed partial class HudBroadcast : ModernLook
         // the big one: the stinger crosses the whole Buddy in the grade's colour first, then the plate slams in behind it, a
         // touch big and settling (a pickup is a small mint chip at the side: this is the grade's colour across everything)
         var slam = new ScaleTransform(1, 1);
+        var jolt = new TranslateTransform();
         plate.RenderTransformOrigin = new Point(0, .5);
-        plate.RenderTransform = slam;
+        plate.RenderTransform = new TransformGroup { Children = { slam, jolt } };
         if (_line.Visibility == Visibility.Visible) Motion.Play(_lineSweep, 700, t => _lineSweep.At(t is > 0 and < 1 ? t : -1, c, 1), () => _lineSweep.At(-1, c));
+        // shards of the grade's colour off the tile as it stamps down
+        EsportsFx.Spray(plate, new Point(26, 18), 8, 30, -170, -10, new[] { c, Mod.Mix(c, Colors.White, .5), Colors.White }, 1000, fall: 10, delay: .26, sparks: true);
         Motion.Play(plate, 1500, t =>
         {
             slam.ScaleX = slam.ScaleY = t < .1 ? 1.12 : EsportsFx.Punch(Seg(t, .1, .4), 1.12, 2.4);
+            jolt.X = EsportsFx.Shake(t, .26, .42, 2.5, 2.5);
+            jolt.Y = -8 * (1 - Out(Seg(t, .06, .3)));
             plate.Wipe = Out(Seg(t, .06, .3));
             plate.FlashAt(t < .25 ? Seg(t, .1, .25) * .8 : (1 - Seg(t, .25, .8)) * .8, c);
             plate.SweepAt(t is > .25 and < .7 ? Seg(t, .25, .7) : -1, Mod.Mix(c, Colors.White, .3));
             if (plate.Content != null) plate.Content.Opacity = Seg(t, .12, .3);
-            sc.ScaleX = sc.ScaleY = .6 + .4 * Back(Seg(t, .18, .45), 2.4);
-        }, () => { plate.Wipe = 1; plate.FlashAt(0, c); plate.SweepAt(-1); if (plate.Content != null) plate.Content.Opacity = 1; sc.ScaleX = sc.ScaleY = 1; slam.ScaleX = slam.ScaleY = 1; });
+            sc.ScaleX = sc.ScaleY = t < .18 ? 1.6 : EsportsFx.Punch(Seg(t, .18, .42), 1.6, 2.6);
+            if (_rareTile is { } rt) rt.Opacity = Seg(t, .14, .2);
+        }, () => { plate.Wipe = 1; plate.FlashAt(0, c); plate.SweepAt(-1); if (plate.Content != null) plate.Content.Opacity = 1; sc.ScaleX = sc.ScaleY = 1; slam.ScaleX = slam.ScaleY = 1; jolt.X = jolt.Y = 0; if (_rareTile is { } rt) rt.Opacity = 1; });
     }
 
     /// <summary>Your best passed: the tile's bar runs on to full, the tile flashes white to mint and its star punches in, a mint stinger crosses the bar.</summary>
@@ -855,11 +861,13 @@ sealed partial class HudBroadcast : ModernLook
         var whole = new System.Windows.Shapes.Path { Fill = Frozen(Mod.A(Colors.White, .5)), IsHitTestVisible = false, Opacity = 0 };
         if (_line.ActualWidth > 4) whole.Data = Cut(new Rect(0, 0, _line.ActualWidth, _line.ActualHeight), LineLean);
         _line.Children.Add(whole);
+        // cyan and white shards off the star as it punches
+        EsportsFx.Spray(tile, new Point(tile.ActualWidth > 0 ? tile.ActualWidth / 2 : 24, tile.ActualHeight > 0 ? tile.ActualHeight / 2 : 24), 8, 24, -200, 20, new[] { CyanC, Colors.White, MintC2 }, 1000, fall: 8, delay: .3, sparks: true);
         Motion.Play(tile, 1800, t =>
         {
             if (bar != null) bar.ScaleX = was + (1 - was) * Out(Seg(t, 0, .3));
             tile.FlashAt(t < .3 ? 0 : t < .38 ? Seg(t, .3, .38) : 1 - Seg(t, .38, .85), Colors.White);
-            punch.ScaleX = punch.ScaleY = t < .3 ? 1 : .6 + .4 * Back(Seg(t, .3, .55), 3);
+            punch.ScaleX = punch.ScaleY = t < .3 ? 1 - .1 * Seg(t, .18, .3) : EsportsFx.Punch(Seg(t, .3, .56), 1.45, 2.8);
             _lineSweep.At(t is > .3 and < .75 ? Seg(t, .3, .75) : -1, MintC2);
             whole.Opacity = t is >= .3 and < .4 ? .9 * (1 - Seg(t, .3, .4)) : 0;
             plate.Wipe = t < .84 ? Out(Seg(t, .3, .44)) : 1 - Seg(t, .84, .96);
@@ -915,20 +923,20 @@ sealed partial class HudBroadcast : ModernLook
             for (int k = 0; k < heads.Count; k++)
             {
                 var s = heads[k];
-                s.Wipe = Out(Seg(t, .38 + k * .04, .52 + k * .04));
-                if (s.Content != null) s.Content.Opacity = Seg(t, .44 + k * .04, .54 + k * .04);
-                s.SweepAt(Band(t, .52 + k * .03, .22));
+                s.Wipe = Out(Seg(t, .3 + k * .04, .44 + k * .04));
+                if (s.Content != null) s.Content.Opacity = Seg(t, .36 + k * .04, .46 + k * .04);
+                s.SweepAt(Band(t, .44 + k * .03, .22));
             }
-            if (hpLine != null) hpLine.Opacity = Seg(t, .46, .56);
+            if (hpLine != null) hpLine.Opacity = Seg(t, .38, .48);
             foreach (var (r, i) in rows)
             {
-                r.Enter = Out(Seg(t, .4 + i * .045, .58 + i * .045));
-                r.SweepAt(Band(t, .52 + i * .04, .22), CyanC);
-                if (r.Leader) r.Crown = Seg(t, .62, .86);
+                r.Enter = Out(Seg(t, .32 + i * .045, .5 + i * .045));
+                r.SweepAt(Band(t, .44 + i * .04, .22), CyanC);
+                if (r.Leader) r.Crown = Seg(t, .56, .8);
             }
             if (foot != null)
             {
-                double at = .46 + rows.Count * .045;
+                double at = .38 + rows.Count * .045;
                 foot.Wipe = Out(Seg(t, at, at + .16));
                 if (foot.Content != null) foot.Content.Opacity = Seg(t, at + .08, at + .18);
                 foot.SweepAt(Band(t, at + .08, .2));

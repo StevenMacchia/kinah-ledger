@@ -639,8 +639,11 @@ sealed partial class HudTelestrator : ModernLook
         _rare.Children.Insert(Math.Min(1, _rare.Children.Count), hl);
         var slap = new TranslateTransform();
         var tilt = new RotateTransform(0);
+        var pop = new ScaleTransform(1, 1);
         _rare.RenderTransformOrigin = new Point(0, .5);
-        _rare.RenderTransform = new TransformGroup { Children = { tilt, slap } };
+        _rare.RenderTransform = new TransformGroup { Children = { pop, tilt, slap } };
+        // ink flicked off the tile in the grade's colour as the pen lands on it
+        EsportsFx.Spray(_rare, new Point(24, 21), 7, 26, -170, 10, new[] { c, Mod.Mix(c, Colors.White, .45), PenC }, 1100, fall: 12, delay: .2);
         Motion.Play(ink, 1500, t =>
         {
             if (t <= .72 || _rareLoop < 1)
@@ -650,6 +653,7 @@ sealed partial class HudTelestrator : ModernLook
                 ink.InvalidateVisual();
             }
             double k = Seg(t, 0, .16);
+            pop.ScaleX = pop.ScaleY = EsportsFx.Punch(Seg(t, 0, .34), .85, 2.8);
             slap.X = -14 * (1 - Out(k));
             tilt.Angle = -2.5 * (1 - EsportsFx.Punch(k, 0, 2.6));
             _rare.Opacity = Math.Min(1, k * 3);
@@ -793,8 +797,8 @@ sealed partial class HudTelestrator : ModernLook
         Motion.Play(_fight, 820, t =>
         {
             double k = Out(Seg(t, 0, .56));
-            _fightShift.Y = 8 * (1 - k);
-            _fightBody.Opacity = .25 + .75 * k;
+            _fightShift.Y = 5 * (1 - k);
+            _fightBody.Opacity = .55 + .45 * k;
             _flash.Opacity = 1 - Out(Seg(t, 0, .3));
             _snapScale.ScaleX = _snapScale.ScaleY = 1.035 - .035 * Out(Seg(t, 0, .4));
             _snap.Opacity = 1 - Seg(t, .55, 1);
@@ -817,7 +821,7 @@ sealed partial class HudTelestrator : ModernLook
         bool wipe = e.Outcome == "wipe";
         HeadPlate(OutcomeText(e), wipe ? CoralC : PenMintC, Clock(e.Duration(e.End ?? DateTime.UtcNow)), 2400, ticks: !wipe, small: e.Title, cross: wipe);
         if (wipe) Rewind();
-        else { FreezeFrame(); Swipe(); LeaderRow()?.Crown(); }
+        else { FreezeFrame(); LeaderRow()?.Crown(); }
     }
 
     /// <summary>
@@ -847,7 +851,7 @@ sealed partial class HudTelestrator : ModernLook
         _fight.Children.Add(wash);
         Motion.Play(wash, 1200, t =>
         {
-            wash.Opacity = t < .06 ? Seg(t, 0, .06) : 1 - Out(Seg(t, .3, 1));
+            wash.Opacity = t < .05 ? Seg(t, 0, .05) : 1 - Out(Seg(t, .14, .42));
             _fightShift.X = EsportsFx.Shake(t, 0, .34, 6, 3.5);
         }, () => { _fightShift.X = 0; _fight.Children.Remove(wash); });
     }
@@ -904,8 +908,26 @@ sealed partial class HudTelestrator : ModernLook
         plate.Loaded += (_, _) => Seat();
         var head = _head;
         double inT = 140 / ms, outT = 1 - 380 / ms;
+        // a kill's word is slapped down by hand: from larger and tilted to its place, its shade put on once it has landed,
+        // and a few drops of ink fly off its first letter
+        ScaleTransform? wsc = null; RotateTransform? wrot = null;
+        if (ticks)
+        {
+            wsc = new ScaleTransform(1, 1); wrot = new RotateTransform(0);
+            word.RenderTransformOrigin = new Point(.2, .6);
+            word.RenderTransform = new TransformGroup { Children = { wsc, wrot } };
+            word.Effect = null;
+            EsportsFx.Spray(plate, new Point(16, 10), 6, 18, -150, -40, new[] { c, Mod.Mix(c, Colors.White, .4) }, ms * .5, fall: 10, delay: inT * 2.2);
+        }
         Motion.Play(_fightFx, ms, t =>
         {
+            if (wsc != null && wrot != null)
+            {
+                double k = Seg(t, 0, inT * 1.2);
+                wsc.ScaleX = wsc.ScaleY = EsportsFx.Punch(k, 1.35, 2.4);
+                wrot.Angle = -6 * (1 - Out(k));
+                if (k >= 1 && word.Effect == null) word.Effect = Shade();
+            }
             // in with a drop and a small overshoot; out lifting away before the head's own words come back (never both at once)
             double i = Out(Seg(t, 0, inT)), o = Seg(t, outT, outT + (1 - outT) * .55);
             plate.Opacity = i * (1 - o);

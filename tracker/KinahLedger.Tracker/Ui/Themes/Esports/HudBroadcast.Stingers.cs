@@ -120,14 +120,14 @@ sealed partial class HudBroadcast
         var s = FightSize();
         double span = s.Width + 2 * s.Height * Tan + 8;
         // (2026-11-21: the plates cover the meter for under half a second, then the rows build in behind them)
-        double pa = t < .4 ? .5 * Out(Seg(t, 0, .12)) : .5 + .5 * In(Seg(t, .4, .56));
-        double pb = t < .37 ? .5 * Out(Seg(t, .02, .14)) : .5 + .5 * In(Seg(t, .37, .52));
+        double pa = t < .32 ? .5 * Out(Seg(t, 0, .1)) : .5 + .5 * In(Seg(t, .32, .46));
+        double pb = t < .29 ? .5 * Out(Seg(t, .015, .11)) : .5 + .5 * In(Seg(t, .29, .43));
         o.A.X = -span + 2 * span * pa;
         o.B.X = -span + 2 * span * pb;
-        o.St.X = -span + 2 * span * (t < .34 ? Seg(t, 0, .2) : Seg(t, .37, .6));
-        o.Brand.Opacity = t < .37 ? Seg(t, .07, .11) : 1 - Seg(t, .37, .41);
-        o.Punch.ScaleX = o.Punch.ScaleY = t < .07 ? 1.22 : EsportsFx.Punch(Seg(t, .07, .2), 1.22, 2.2);
-        o.Drift.X = 14 - 28 * Seg(t, .07, .41);
+        o.St.X = -span + 2 * span * (t < .27 ? Seg(t, 0, .18) : Seg(t, .29, .52));
+        o.Brand.Opacity = t < .29 ? Seg(t, .05, .09) : 1 - Seg(t, .29, .33);
+        o.Punch.ScaleX = o.Punch.ScaleY = t < .05 ? 1.25 : EsportsFx.Punch(Seg(t, .05, .17), 1.25, 2.4);
+        o.Drift.X = 14 - 28 * Seg(t, .05, .33);
         o.Fx.Visibility = t >= 1 ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -222,8 +222,9 @@ sealed partial class HudBroadcast
         var c = wipe ? LiveC : MintC2;
         var word = (wipe ? L.T("DEFEAT") : e.Outcome == "kill" ? L.T("VICTORY") : OutcomeText(e)).ToUpper(CultureInfo.CurrentCulture);
         var time = Clock(e.Duration(e.End ?? DateTime.UtcNow));
-        var mvp = Meter?.Members.FirstOrDefault(m => m.Rank == 1);
-        var podium = Meter?.Members.Where(m => m.Rank is 2 or 3).OrderBy(m => m.Rank).ToList() ?? new();
+        // a wipe names no MVP and no podium: the word and the time alone
+        var mvp = wipe ? null : Meter?.Members.FirstOrDefault(m => m.Rank == 1);
+        var podium = wipe ? new() : Meter?.Members.Where(m => m.Rank is 2 or 3).OrderBy(m => m.Rank).ToList() ?? new();
         var fx = Overlay();
         var back = new TranslateTransform(-4000, 0); var front = new TranslateTransform(-4000, 0); var st = new TranslateTransform(-4000, 0);
         fx.Children.Add(Sheet((dc, s, l) =>
@@ -308,20 +309,43 @@ sealed partial class HudBroadcast
         // (2026-11-21: the full takeover is a punch, not a hold: the plates slam over the meter, stay under half a second, and
         // leave to the right; the result stays as a ticker over the head while the rows read again under it)
         var ticker = ResultTicker(e, wipe, word, time, mvp);
+        var frontEl = (FrameworkElement)fx.Children[2];
+        var sag = new TranslateTransform();
+        if (wipe) frontEl.RenderTransform = new TransformGroup { Children = { front, sag } };
+        int n = rows.Count;
         Motion.Play(fx, 1700, t =>
         {
             var s = FightSize();
             double span = s.Width + 2 * s.Height * Tan + 8;
-            double pb = t < .25 ? .5 * Out(Seg(t, 0, .07)) : .5 + .5 * In(Seg(t, .25, .34));
-            double pf = t < .23 ? .5 * Out(Seg(t, .02, .09)) : .5 + .5 * In(Seg(t, .23, .32));
-            back.X = -span + 2 * span * pb;
-            // a wipe's front plate shudders as it lands (a broken feed); a kill's lands clean
-            front.X = -span + 2 * span * pf + (wipe ? EsportsFx.Shake(t, .08, .22, 7, 3.5) : 0);
-            st.X = wipe ? -4000 : -span + 2 * span * (t < .2 ? Seg(t, 0, .14) : Seg(t, .22, .4));
-            fx.Visibility = t >= .36 ? Visibility.Collapsed : Visibility.Visible;
-            foreach (var (r, i) in rows) r.SweepAt(Band(t, .3 + i * .04, .22), c, wipe ? .55 : .9);
+            if (!wipe)
+            {
+                // a kill: the plates slam across on the slant with the streaks, hold a beat (under 0.3 s) and leave right
+                double pb = t < .2 ? .5 * Out(Seg(t, 0, .06)) : .5 + .5 * In(Seg(t, .2, .28));
+                double pf = t < .18 ? .5 * Out(Seg(t, .015, .075)) : .5 + .5 * In(Seg(t, .18, .26));
+                back.X = -span + 2 * span * pb;
+                front.X = -span + 2 * span * pf;
+                st.X = -span + 2 * span * (t < .16 ? Seg(t, 0, .12) : Seg(t, .18, .34));
+                fx.Visibility = t >= .3 ? Visibility.Collapsed : Visibility.Visible;
+                foreach (var (r, i) in rows) r.SweepAt(Band(t, .24 + i * .04, .22), c, .9);
+            }
+            else
+            {
+                // a wipe: no slash and no streaks. The red plate is simply there, the navy one drops onto it with weight
+                // (no overshoot) and shudders, the word sags; then both fall away down and the rows come back from the
+                // bottom up, dim at first
+                back.X = 0; front.X = EsportsFx.Shake(t, .07, .2, 4, 3);
+                double d = Seg(t, 0, .07), away = Seg(t, .19, .27);
+                sag.Y = -14 * (1 - d * d) + 3 * Seg(t, .08, .16) + s.Height * away * away;
+                fx.Opacity = Math.Min(1, Seg(t, 0, .05) * 1.5) * (1 - Seg(t, .19, .24));
+                fx.Visibility = t >= .27 ? Visibility.Collapsed : Visibility.Visible;
+                foreach (var (r, i) in rows) r.Root.Opacity = t < .27 ? 1 : .55 + .45 * Out(Seg(t, .27 + (n - 1 - i) * .05, .5 + (n - 1 - i) * .05));
+            }
             ticker?.Invoke(t);
-        }, () => { _fight.Children.Remove(fx); foreach (var (r, _) in rows) r.SweepAt(-1, c); ticker?.Invoke(1); });
+        }, () =>
+        {
+            _fight.Children.Remove(fx); ticker?.Invoke(1);
+            foreach (var (r, _) in rows) { r.SweepAt(-1, c); r.Root.Opacity = 1; }
+        });
     }
 
     /// <summary>
@@ -380,14 +404,15 @@ sealed partial class HudBroadcast
             if (gone) return;
             if (t >= 1) { gone = true; _fight.Children.Remove(row); head.Opacity = 1; return; }
             // the head's own words make way under it, and come back as it wipes off
-            head.Opacity = t < .9 ? 1 - Seg(t, .2, .26) : Seg(t, .93, 1);
-            tag.Wipe = t < .88 ? Out(Seg(t, .22, .3)) : 1 - Seg(t, .88, .95);
-            tagT.Opacity = t < .88 ? Seg(t, .26, .3) : 1 - Seg(t, .88, .92);
-            punch.ScaleX = punch.ScaleY = t < .26 ? 1.25 : EsportsFx.Punch(Seg(t, .26, .42), 1.25, 2.6);
-            tag.SweepAt(Band(t, .3, .2), Colors.White);
-            card.Wipe = score.Wipe = t < .86 ? Out(Seg(t, .26, .38)) : 1 - Seg(t, .86, .94);
-            slide.X = -40 * (1 - Out(Seg(t, .26, .42)));
-            double words = t < .86 ? Seg(t, .32, .4) : 1 - Seg(t, .86, .9);
+            // (the head's words come back while the plates are still wiping off over them: never an empty head)
+            head.Opacity = t < .87 ? 1 - Seg(t, .18, .22) : Seg(t, .9, .94);
+            tag.Wipe = t < .86 ? Out(Seg(t, .2, .28)) : 1 - Seg(t, .86, .96);
+            tagT.Opacity = t < .86 ? Seg(t, .24, .28) : 1 - Seg(t, .86, .89);
+            punch.ScaleX = punch.ScaleY = t < .24 ? 1.25 : EsportsFx.Punch(Seg(t, .24, .4), 1.25, 2.6);
+            tag.SweepAt(Band(t, .28, .2), Colors.White);
+            card.Wipe = score.Wipe = t < .84 ? Out(Seg(t, .25, .37)) : 1 - Seg(t, .84, .95);
+            slide.X = -40 * (1 - Out(Seg(t, .25, .41)));
+            double words = t < .84 ? Seg(t, .3, .38) : 1 - Seg(t, .84, .88);
             mid.Opacity = words; fig.Opacity = words;
             card.SweepAt(Band(t, .4, .24), c);
         };
