@@ -310,7 +310,10 @@ sealed partial class HudAura : ModernLook
     /// The Buddy's plate: the low azure aura off its top edge (grey and out while paused), the dark core, the energy's core
     /// line along its foot; a pickup's light crossing it.
     /// </summary>
-    void DrawLinePlate(DrawingContext dc, Size s)
+    void DrawLinePlate(DrawingContext dc, Size s) => LinePlateArt(dc, s, _dim, WashK, _sheen);
+
+    /// <summary>The Buddy's plate as drawn on its own (the Applicants window wears it too, Ui/ApplicantsFace.Themes.cs).</summary>
+    internal static void LinePlateArt(DrawingContext dc, Size s, bool _dim, double WashK, double _sheen = -1)
     {
         if (s.Width < 20 || s.Height < LZ + 8) return;
         var r = new Rect(1, LZ, s.Width - 2, s.Height - LZ - 1);

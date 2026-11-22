@@ -77,7 +77,7 @@ sealed partial class HudFinals
     /// the rim's top. Drawn once (again only when its size or the opacity setting changes); the lights that cross it are
     /// <see cref="Band"/>s over it.
     /// </summary>
-    static void Plate(DrawingContext dc, Size s, double radius, double opacity, bool shadow = true, bool spot = true, double rim = 1, int lamps = 0, bool beams = false, bool rig = false)
+    internal static void Plate(DrawingContext dc, Size s, double radius, double opacity, bool shadow = true, bool spot = true, double rim = 1, int lamps = 0, bool beams = false, bool rig = false)
     {
         PlateBody(dc, s, radius, opacity, shadow, spot, rim);
         if (lamps > 0) Rig(dc, s, lamps, beams, rig);

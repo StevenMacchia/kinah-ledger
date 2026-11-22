@@ -10,7 +10,10 @@ namespace KinahLedger.Ui;
 
 public static partial class WpfApp
 {
-    static readonly string[] ApplicantThemes = { HudThemes.Classic, HudThemes.Tactical, HudThemes.Wacky, HudThemes.Glitch, HudThemes.Modern };
+    static readonly string[] ApplicantThemes = { HudThemes.Classic, HudThemes.Tactical, HudThemes.Wacky, HudThemes.Glitch, HudThemes.Modern, HudThemes.Atreia, HudThemes.Esports, HudThemes.Elements, HudThemes.Overdrive };
+    /// <summary>The families whose looks each have a face of their own (Ui/ApplicantsFace.Themes.cs), and those looks.</summary>
+    static readonly string[] ApplicantLookThemes = { HudThemes.Atreia, HudThemes.Esports, HudThemes.Elements, HudThemes.Overdrive };
+    static IEnumerable<(string Theme, string Look)> ApplicantLooks() => ApplicantLookThemes.SelectMany(t => HudThemes.Looks(t).Select(l => (t, l.Key)));
     static readonly int[] ApplicantCounts = { 1, 4, 10 };
     static readonly string[] ApplicantLangs = { "en", "ko", "zh-TW" };
 
@@ -91,6 +94,58 @@ public static partial class WpfApp
             }
             check(seen.SequenceEqual(ApplicantThemes.Select(t => "applicants:" + t)), "applicants: the window takes the overlay's theme (" + string.Join(", ", seen) + ")");
 
+            // ...and the Buddy's look in it, where the theme's looks each have their own face; the pop-out the same
+            var lookSeen = new List<string>();
+            foreach (var (theme, look) in ApplicantLooks())
+            {
+                if (ov != null) { ov.Theme = () => theme; ov.Look = () => look; }
+                w.ApplicantsTickForTest(now); DoEvents();
+                if (ov?.FaceForTest is not { } f || ApplicantsFace.LookOf(f) != look) lookSeen.Add($"{look}: {(ov?.FaceForTest is { } g ? ApplicantsFace.LookOf(g) ?? "none" : "no face")}");
+            }
+            var other = ApplicantsFace.Build(HudThemes.Elements, ApplicantsFace.Sample(2, now), now, .94, HudThemes.Versus);   // a look of another theme: the theme's first
+            if (ApplicantsFace.LookOf(other) != HudThemes.Looks(HudThemes.Elements)[0].Key) lookSeen.Add("elements with versus: " + ApplicantsFace.LookOf(other));
+            var pop = new ApplicantsPopOut(w, new PopOutPrefs.Spot(), () => { });
+            pop.Draw(ApplicantsFace.Sample(2, now), now, HudThemes.Overdrive, HudThemes.Manga);
+            if (pop.FaceForTest is not FrameworkElement pf || ApplicantsFace.LookOf(pf) != HudThemes.Manga) lookSeen.Add("pop-out: not manga");
+            pop.Close();
+            if (ov != null) { ov.Theme = () => HudThemes.Classic; ov.Look = () => null; }
+            check(lookSeen.Count == 0, $"applicants: the window and its pop-out take the Buddy's look in Atreia, Esports, Elements and Overdrive ({ApplicantLooks().Count()} looks)" + (lookSeen.Count > 0 ? ": " + string.Join("; ", lookSeen) : ""));
+
+            // someone new: their row's arrival beat, held mid-way and at its end (a render's frames): something on its stage
+            // mid-way, and at the end nothing left (no stage, the row's cells at rest, the rows unclipped); nothing with motion off
+            var beat = new List<string>();
+            double? frozen0 = Motion.FrozenAt;
+            bool still0 = Motion.Still;
+            try
+            {
+                foreach (var (theme, look) in ApplicantLooks().Prepend((HudThemes.Classic, "")))
+                {
+                    double ms = 0; int mid = -1;
+                    bool restful = true;
+                    foreach (var at in new[] { .45, 1.0 })
+                    {
+                        var face = ApplicantsFace.Build(theme, ApplicantsFace.Sample(4, now), now, .94, look.Length > 0 ? look : null);
+                        var win = Parked(face);
+                        Motion.FrozenAt = at;
+                        ms = ApplicantsFace.Arrive(face);
+                        DoEvents();
+                        int drawn = ApplicantsFace.BeatPartsForTest(face);
+                        if (at < 1) mid = drawn;
+                        else restful = drawn == 0 && ApplicantsFace.MovedForTest(face) == 0;
+                        win.Close();
+                    }
+                    Motion.FrozenAt = null; Motion.Still = true;
+                    var still = ApplicantsFace.Build(theme, ApplicantsFace.Sample(4, now), now, .94, look.Length > 0 ? look : null);
+                    var sw = Parked(still);
+                    double none = ApplicantsFace.Arrive(still);
+                    sw.Close();
+                    Motion.Still = still0;
+                    if (ms <= 0 || ms > 1200 || (look.Length > 0 && mid <= 0) || !restful || none != 0) beat.Add($"{(look.Length > 0 ? look : theme)}: {ms} ms, {mid} parts mid-way, at rest {restful}, with motion off {none}");
+                }
+            }
+            finally { Motion.FrozenAt = frozen0; Motion.Still = still0; }
+            check(beat.Count == 0, "applicants: a new applicant's row comes in with its look's short beat (at most 1.2 s), leaves nothing behind, and none with motion off" + (beat.Count > 0 ? ": " + string.Join("; ", beat) : ""));
+
             // a window of its own over the game, never focused, click-through only as a setting, its grip grabbable then
             long ex0 = ov?.ExStyleForTest ?? 0;
             w.SetApplicantsClickThrough(true); DoEvents();
@@ -130,16 +185,17 @@ public static partial class WpfApp
             InEachLanguage(code =>
             {
                 L.Misses = code == "en" ? null : new HashSet<string>();
-                foreach (var theme in ApplicantThemes)
+                foreach (var (theme, look) in ApplicantThemes.Select(t => (t, (string?)null)).Concat(ApplicantLooks().Select(x => (x.Theme, (string?)x.Look))))
                     foreach (int n in ApplicantCounts)
                     {
                         var items = ApplicantsFace.Sample(n, now);
-                        var face = ApplicantsFace.Build(theme, items, now, 0.94);
+                        var face = ApplicantsFace.Build(theme, items, now, 0.94, look);
                         var win = Parked(face);
-                        if (RowCount(face) != n) problems.Add($"{theme} {n} {code}: {RowCount(face)} rows");
-                        foreach (var c in CutOffs(face, items.Select(a => a.Name).ToList())) problems.Add($"{theme} {n} {code}: {c}");
-                        if (Spill(face) is { Length: > 0 } sp) problems.Add($"{theme} {n} {code}: {sp}");
-                        sources.AddRange(w.SourceWordsShown(face).Select(s => $"{theme} {code}: {s}"));
+                        var tag = look ?? theme;
+                        if (RowCount(face) != n) problems.Add($"{tag} {n} {code}: {RowCount(face)} rows");
+                        foreach (var c in CutOffs(face, items.Select(a => a.Name).ToList())) problems.Add($"{tag} {n} {code}: {c}");
+                        if (Spill(face) is { Length: > 0 } sp) problems.Add($"{tag} {n} {code}: {sp}");
+                        sources.AddRange(w.SourceWordsShown(face).Select(s => $"{tag} {code}: {s}"));
                         win.Close();
                     }
                 if (L.Misses != null) lock (L.Misses) foreach (var m in L.Misses) missing.Add($"{code}: {m}");
@@ -199,9 +255,73 @@ public static partial class WpfApp
         var now = DateTime.UtcNow;
         // a parked window held open the whole time: closing the last window would end the application between two faces
         var keep = Parked(new Border { Width = 4, Height = 4 });
-        try { Sheets(); } finally { keep.Close(); }
+        // KL_APPLICANTS_PART=sheets|looks|arrive renders that part only (all three by default)
+        var part = Environment.GetEnvironmentVariable("KL_APPLICANTS_PART") ?? "";
+        try
+        {
+            if (part is "" or "sheets") Sheets();
+            if (part is "" or "looks") Looks();
+            if (part is "" or "arrive") Arrivals();
+        }
+        finally { keep.Close(); }
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}" + (File.Exists(spill) ? " (spill.txt lists what was cut)" : " (nothing cut)"));
         return File.Exists(spill) ? 1 : 0;
+
+        // every look of the themes whose looks have faces of their own, 1, 4 and 10 waiting (applicants-look-LOOK-N-LANG.png),
+        // and one sheet of them all at 4 (applicants-looks-LANG.png), a family to a row
+        void Looks() => InEachLanguage(code =>
+        {
+            var sheet = new Grid { Background = new SolidColorBrush(Color.FromRgb(0x0C, 0x0D, 0x11)) };
+            var families = ApplicantLookThemes.ToList();
+            foreach (var _ in families) sheet.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            for (int c = 0; c < 4; c++) sheet.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            foreach (var (theme, look) in ApplicantLooks())
+            {
+                foreach (int n in ApplicantCounts)
+                {
+                    var items = ApplicantsFace.Sample(n, now);
+                    var alone = ApplicantsFace.Build(theme, items, now, 0.94, look);
+                    var win = Parked(alone);
+                    var file = $"applicants-look-{look}-{n}-{code}.png";
+                    SavePart(alone, Path.Combine(dir, file), HudKit.GameScene());
+                    SpillNote(dir, file, alone);
+                    win.Close();
+                }
+                var cell = new Border { Background = HudKit.GameScene(), Margin = new Thickness(8), Padding = new Thickness(16), VerticalAlignment = VerticalAlignment.Top, Child = ApplicantsFace.Build(theme, ApplicantsFace.Sample(4, now), now, 0.94, look) };
+                Grid.SetRow(cell, families.IndexOf(theme)); Grid.SetColumn(cell, HudThemes.Looks(theme).Select(l => l.Key).ToList().IndexOf(look));
+                sheet.Children.Add(cell);
+            }
+            var sw = Parked(sheet);
+            Save(sheet, Path.Combine(dir, $"applicants-looks-{code}.png"), 0);
+            sw.Close();
+        });
+
+        // the arrival beat of every look (and Classic's slide) held at points of its course, 4 waiting, in English:
+        // applicants-arrive-LOOK-15/40/75.png, or with KL_MOMENT_SEQ=N every 1/N as ui-theme-applicants-LOOK-arrive-sNN.png
+        // (tests/ui/clips.py makes those clips)
+        void Arrivals()
+        {
+            var frames = MomentFrames();
+            double? frozen0 = Motion.FrozenAt;
+            try
+            {
+                foreach (var (theme, look) in ApplicantLooks().Prepend((HudThemes.Classic, HudThemes.Classic)))
+                    for (int i = 0; i < frames.Length; i++)
+                    {
+                        var face = ApplicantsFace.Build(theme, ApplicantsFace.Sample(4, now), now, 0.94, look);
+                        var win = Parked(face);
+                        Motion.FrozenAt = frames[i];
+                        ApplicantsFace.Arrive(face);
+                        DoEvents();
+                        var file = frames.Length > 3 ? $"ui-theme-applicants-{look}-arrive-s{i:00}.png" : $"applicants-arrive-{look}-{Math.Round(frames[i] * 100)}.png";
+                        SavePart(face, Path.Combine(dir, file), HudKit.GameScene());
+                        SpillNote(dir, file, face);
+                        Motion.FrozenAt = frozen0;
+                        win.Close();
+                    }
+            }
+            finally { Motion.FrozenAt = frozen0; }
+        }
 
         void Sheets() => InEachLanguage(code =>
         {

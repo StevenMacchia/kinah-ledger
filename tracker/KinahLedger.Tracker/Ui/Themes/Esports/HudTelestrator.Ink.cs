@@ -46,7 +46,7 @@ sealed partial class HudTelestrator
     /// The analysis board: a soft drop under it (outside its shape, inside the window's room), charcoal glass darker at its
     /// foot, the tactics grid, a faint light along its top, the hairline rim and the replay frame's corner brackets.
     /// </summary>
-    static void Board(DrawingContext dc, Size s, double radius, double opacity, bool shadow = true, bool grid = true, double brackets = .55)
+    internal static void Board(DrawingContext dc, Size s, double radius, double opacity, bool shadow = true, bool grid = true, double brackets = .55)
     {
         if (s.Width < 4 || s.Height < 4) return;
         // drawn once per size and setting, then replayed (a board is redrawn only when its size changes)

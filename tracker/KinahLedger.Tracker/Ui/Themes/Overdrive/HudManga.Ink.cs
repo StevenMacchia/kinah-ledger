@@ -71,7 +71,7 @@ sealed partial class HudManga
     // ================================================================ the parts
 
     /// <summary>Screentone: a dot grid at 45 degrees whose dots swell toward <paramref name="corner"/> and vanish by <paramref name="reach"/> px, clipped to <paramref name="clip"/>.</summary>
-    static void Tone(DrawingContext dc, Geometry clip, Point corner, double reach, double pitch = 4.2, double maxR = 1.75, Brush? ink = null)
+    internal static void Tone(DrawingContext dc, Geometry clip, Point corner, double reach, double pitch = 4.2, double maxR = 1.75, Brush? ink = null)
     {
         var b = clip.Bounds;
         var g = new StreamGeometry();

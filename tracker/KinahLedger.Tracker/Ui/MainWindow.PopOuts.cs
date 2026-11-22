@@ -182,7 +182,7 @@ public partial class MainWindow
         IReadOnlyList<PartyApplicants.Applicant> items;
         try { items = ApplicantsBoard.Pending(now); }
         catch (Exception ex) { CrashLog.Write("applicants pop-out", ex); items = Array.Empty<PartyApplicants.Applicant>(); }
-        try { w.Draw(items, now, HudThemes.Of(HudLook)); }
+        try { w.Draw(items, now, HudThemes.Of(HudLook), HudLook); }
         catch (Exception ex) { CrashLog.Write("applicants pop-out", ex); }
     }
 

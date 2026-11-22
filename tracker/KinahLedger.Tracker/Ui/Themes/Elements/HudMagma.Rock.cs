@@ -248,7 +248,7 @@ sealed partial class HudMagma
     /// <paramref name="heat"/> 0..1 flares the cracks and the foot's glow (a moment); <paramref name="tint"/> turns the
     /// cracks' fire to a colour (a rare drop's grade); <paramref name="ash"/> cools them (a wipe, a pause).
     /// </summary>
-    static void Slab(DrawingContext dc, Size s, double alpha, int seed, double heat = 0, Color? tint = null, bool ash = false, bool cracks = true, bool river = false, bool drip = true)
+    internal static void Slab(DrawingContext dc, Size s, double alpha, int seed, double heat = 0, Color? tint = null, bool ash = false, bool cracks = true, bool river = false, bool drip = true)
     {
         if (s.Width < 8 || s.Height < 8) return;
         var (shape, crack) = SlabOf(s, seed);

@@ -19,13 +19,13 @@ sealed class ApplicantsPopOut : PopOutWindow
     public ApplicantsPopOut(Window main, PopOutPrefs.Spot spot, Action save)
         : base(main, spot, save, L.T("Applicants"), "Applicants window", DefaultWidth, 300) { }
 
-    /// <summary>The people waiting at <paramref name="now"/> in <paramref name="theme"/>: drawn again only when a row, the theme or a row's "ago" changes.</summary>
-    public void Draw(IReadOnlyList<PartyApplicants.Applicant> items, DateTime now, string theme)
+    /// <summary>The people waiting at <paramref name="now"/> in <paramref name="theme"/> (and <paramref name="look"/>'s plate and colours): drawn again only when a row, the theme or a row's "ago" changes.</summary>
+    public void Draw(IReadOnlyList<PartyApplicants.Applicant> items, DateTime now, string theme, string? look = null)
     {
-        var sig = theme + "|" + L.Code + "|" + string.Join(",", items.Select(a => a.Key + ":" + PartyApplicants.Ago(a.At, now)));
+        var sig = theme + "|" + look + "|" + L.Code + "|" + string.Join(",", items.Select(a => a.Key + ":" + PartyApplicants.Ago(a.At, now)));
         if (sig == _sig && FaceForTest != null) return;
         _sig = sig;
-        var face = ApplicantsFace.Build(theme, items, now, 1);
+        var face = ApplicantsFace.Build(theme, items, now, 1, look);
         face.HorizontalAlignment = HorizontalAlignment.Left;
         face.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         face.Width = Math.Max(FaceWidth, Math.Ceiling(face.DesiredSize.Width));

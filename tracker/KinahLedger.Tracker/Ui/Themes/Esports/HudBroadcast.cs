@@ -595,7 +595,10 @@ sealed partial class HudBroadcast : ModernLook
     FrameworkElement? _rareTile;
 
     /// <summary>The Buddy's plate: navy on the slant, a cyan bar under it (grey while paused), the cyan edge at its left.</summary>
-    void DrawLinePlate(DrawingContext dc, Size s)
+    void DrawLinePlate(DrawingContext dc, Size s) => LinePlateArt(dc, s, _dim, _accentLeft);
+
+    /// <summary>The Buddy's plate as drawn on its own (the Applicants window wears it too, Ui/ApplicantsFace.Themes.cs).</summary>
+    internal static void LinePlateArt(DrawingContext dc, Size s, bool _dim, bool _accentLeft)
     {
         if (s.Width < 4 || s.Height < 4) return;
         var shape = Cut(new Rect(0, 0, s.Width, s.Height), LineLean);

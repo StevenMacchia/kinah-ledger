@@ -54,6 +54,7 @@ public partial class MainWindow
         {
             KinahBox = () => _hud is { IsVisible: true } h && h.ActualWidth > 0 ? new Rect(h.Left, h.Top, h.ActualWidth, h.ActualHeight) : null,
             Theme = () => HudThemes.Of(HudLook),
+            Look = () => HudLook,
         };
         _applicantsOverlay.Match(_hudPreview?.HudOpacity ?? _prefs.HudOpacity, _hudPreview?.HudScale ?? _hudPrefs.Scale);
         _applicantsOverlay.Closed += (_, _) => _applicantsOverlay = null;
