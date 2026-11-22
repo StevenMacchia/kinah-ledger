@@ -645,7 +645,7 @@ sealed partial class HudFighter : TacticalLook
             ps.ScaleY = t < .08 ? 1.35 : t < .3 ? 1 + .35 * (1 - Back(Seg(t, .08, .3), 2.4)) : 1;
             if (_timerBlock != null) PaintBlock(_timerBlock, TimerBadge.Tone.On, on);
             // the brackets hold wide a beat, then lock on with an overshoot
-            _blockLock = 11 * (1 - Back(Seg(t, .06, .5), 1.6)) + 2;
+            _blockLock = t < .14 ? 12 : 10 * (1 - Back(Seg(t, .14, .32), 2)) + 2;
             _blockLockA = 1 - Seg(t, .7, 1);
             _blockBrackets?.InvalidateVisual();
         }, () => { if (_timerBlock != null) PaintBlock(_timerBlock, _timerTone, true); blk?.ClearValue(UIElement.RenderTransformProperty); _blockLock = -1; _blockBrackets?.InvalidateVisual(); });
@@ -803,7 +803,7 @@ sealed partial class HudFighter : TacticalLook
             punch.ScaleX = punch.ScaleY = t < hit ? 1.3 : 1 + .3 * (1 - Back(Seg(t, hit, hit + .08), 2.2));
             chev.Opacity = w;
             band.Opacity = t < .82 ? fill : 1 - Seg(t, .82, 1);
-            rules.Opacity = t < hit - .1 ? 0 : t < .82 ? 1 : 1 - Seg(t, .82, 1);
+            rules.Opacity = t <= 0 || t < hit - .1 ? 0 : t < .82 ? 1 : 1 - Seg(t, .82, 1);
         });
     }
 
