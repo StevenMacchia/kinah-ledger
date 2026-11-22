@@ -622,6 +622,10 @@ sealed partial class HudAura : ModernLook
         var surge = Surge(Mod.Mix(_rareC, Colors.White, .15), pw - 20, ph, 26, 29); surge.HorizontalAlignment = HorizontalAlignment.Left; surge.VerticalAlignment = VerticalAlignment.Bottom; surge.Margin = new Thickness(10, 0, 0, 0);
         var rise = new TranslateTransform(); surge.RenderTransform = rise;
         _rare.Children.Insert(Math.Min(_rare.Children.Count, 2), surge);
+        // its white-hot core: a tight column of white energy up off the tile, breaking above the plate for ~0.3 s
+        var core = Surge(Colors.White, 44, ph, 7, 31); core.HorizontalAlignment = HorizontalAlignment.Left; core.VerticalAlignment = VerticalAlignment.Bottom; core.Margin = new Thickness(3, 0, 0, 0);
+        var coreRise = new TranslateTransform(); core.RenderTransform = coreRise;
+        _rare.Children.Insert(Math.Min(_rare.Children.Count, 3), core);
         var jolt = new TranslateTransform(); _rare.RenderTransform = jolt;
         Motion.Play(orb, 1500, t =>
         {
@@ -630,12 +634,16 @@ sealed partial class HudAura : ModernLook
             os.ScaleX = os.ScaleY = t < .12 ? .5 - .3 * g : .2 + 1.05 * k;
             orb.Opacity = t < .12 ? Seg(t, 0, .06) : 1 - Seg(t, .3, .7);
             if (flash != null) flash.Opacity = t < .14 ? Seg(t, .06, .14) : 1 - Seg(t, .14, .6);
-            sc.ScaleX = sc.ScaleY = .5 + .5 * Back(Seg(t, .12, .45), 2.6);
+            // the icon: drawn in with the gather, punched to 1.25x at the burst, eased home
+            sc.ScaleX = sc.ScaleY = t < .12 ? 1 - .2 * Ez.InOut(g) : t < .2 ? .8 + .45 * Back(Seg(t, .12, .2), 2.2) : 1.25 - .25 * Ez.InOut(Seg(t, .2, .5));
             double u = Seg(t, .14, .75);
             rise.Y = -ph * .35 * Out(u);
             surge.Opacity = t < .14 ? 0 : Math.Min(1, 6 * u) * (1 - u);
+            double cu = Seg(t, .13, .33);
+            coreRise.Y = -ph * .55 * Out(cu);
+            core.Opacity = t < .13 || cu >= 1 ? 0 : Math.Min(1, 8 * cu) * (1 - cu * cu);
             jolt.X = Ez.Jolt(Seg(t, .14, .36), 3, 5);
-        }, () => { orb.Opacity = 0; if (flash != null) flash.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; _rare.Children.Remove(surge); jolt.X = 0; _rare.RenderTransform = null; });
+        }, () => { orb.Opacity = 0; if (flash != null) flash.Opacity = 0; sc.ScaleX = sc.ScaleY = 1; _rare.Children.Remove(surge); _rare.Children.Remove(core); jolt.X = 0; _rare.RenderTransform = null; });
     }
 
     /// <summary>
@@ -781,6 +789,9 @@ sealed partial class HudAura : ModernLook
         // then bursts out past its size as the auras ignite, settling square
         var pull = new ScaleTransform(1, 1);
         var was = _fight.RenderTransform;
+        // a white frame as the charge breaks (one frame or two)
+        var flash = new System.Windows.Shapes.Rectangle { Fill = Frozen(Mod.A(Colors.White, .5)), Opacity = 0, IsHitTestVisible = false, RadiusX = 6, RadiusY = 6, Height = Math.Max(0, _fight.ActualHeight - 2) };   // (the fx layer sits at the top, sized by what it holds)
+        _fightFx.Children.Add(flash);
         _fight.RenderTransformOrigin = new Point(.5, .4);
         _fight.RenderTransform = new TransformGroup { Children = { pull, _fightShift } };
         Motion.Play(_fight, 1500, t =>
@@ -789,6 +800,7 @@ sealed partial class HudAura : ModernLook
             pull.ScaleX = pull.ScaleY = t < .07 ? 1 - .05 * Ez.InOut(c) : .95 + .05 * k + .015 * Ez.Wob(Seg(t, .07, .4), 1.5, 4);
             _fightShift.Y = t < .07 ? 3 * c : 3 * (1 - k);
             _fightBody.Opacity = t < .07 ? .3 * c : .3 + .7 * k;
+            flash.Opacity = t >= .1 && t < .15 ? 1 - Seg(t, .1, .15) : 0;
             for (int i = 0; i < rows.Count; i++)
             {
                 int j = rows.Count - 1 - i;
@@ -798,7 +810,7 @@ sealed partial class HudAura : ModernLook
             burst?.Invoke(t < .3 ? -2 : Seg(t, .3, 1) >= 1 ? .999 : Seg(t, .3, 1));
         }, () =>
         {
-            _fightShift.Y = 0; _fightBody.Opacity = 1; pull.ScaleX = pull.ScaleY = 1; _fight.RenderTransform = was;
+            _fightShift.Y = 0; _fightBody.Opacity = 1; pull.ScaleX = pull.ScaleY = 1; _fight.RenderTransform = was; _fightFx.Children.Remove(flash);
             foreach (var r in rows) r.Ignite(-1);
             lead?.PowerUp(-1);
             burst?.Invoke(-1);

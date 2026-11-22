@@ -663,21 +663,24 @@ sealed partial class HudVersus : ModernLook
         var jolt = new TranslateTransform(); _line.RenderTransform = jolt;
         Motion.Play(art, 1600, t =>
         {
-            hsc.ScaleX = hsc.ScaleY = t < .3 ? 1 - .06 * Ez.InOut(Seg(t, .24, .3)) : .94 + .06 * Out(Seg(t, .3, .34)) + .12 * Ez.Wob(Seg(t, .3, .7), 1.5, 4);
-            jolt.X = Ez.Jolt(Seg(t, .3, .48), 2.5, 5);
+            // (2026-11-21 review: dead until a third in): the meter races full in .07, the hit lands at once, the score
+            // punched to 1.2x over 120 ms with an overshoot, then eased home
+            const double H = .07, P = .145;
+            hsc.ScaleX = hsc.ScaleY = t < H ? 1 - .06 * Ez.InOut(Seg(t, .03, H)) : t < P ? .94 + .26 * Back(Seg(t, H, P), 2.2) : 1.2 - .2 * Ez.InOut(Seg(t, P, .42));
+            jolt.X = Ez.Jolt(Seg(t, H, .26), 2.5, 5);
             _beat = false; _share = was;
-            _complete = Out(Seg(t, 0, .3));
-            if (t >= .3) { _beat = beat; _complete = 1; }
+            _complete = Out(Seg(t, 0, H));
+            if (t >= H) { _beat = beat; _complete = 1; }
             art.InvalidateVisual();
-            flash.Opacity = .45 * Flash(t, .3, .07);
-            double b = Seg(t, .3, .55);
-            band.Opacity = t < .3 || t > .55 ? 0 : Math.Sin(Math.PI * b);
+            flash.Opacity = .5 * Flash(t, H, .07);
+            double b = Seg(t, H, .32);
+            band.Opacity = t < H || t > .32 ? 0 : Math.Sin(Math.PI * b);
             bandAt.X = -50 + (lineW + 60) * Out(b);
-            double k = Seg(t, .32, .44);
+            double k = Seg(t, .075, .19);
             at.X = -22 * (1 - Back(k, 2.2));
-            slab.Opacity = t < .32 ? 0 : t < .82 ? Seg(t, .32, .37) : 1 - Seg(t, .82, .97);
-            ss.ScaleX = ss.ScaleY = SlamScale(Seg(t, .36, .5), 1.5);
-            lines.Opacity = t < .34 ? 0 : .9 * (1 - Seg(t, .36, .7)); lineAt.X = -10 * Seg(t, .34, .7);
+            slab.Opacity = t < .075 ? 0 : t < .82 ? Seg(t, .075, .11) : 1 - Seg(t, .82, .97);
+            ss.ScaleX = ss.ScaleY = SlamScale(Seg(t, .09, .24), 1.5);
+            lines.Opacity = t < .08 ? 0 : .9 * (1 - Seg(t, .1, .45)); lineAt.X = -10 * Seg(t, .08, .45);
         }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); _lineFx.Children.Clear(); _lineAnchor.Children.Clear(); if (hour != null) hour.RenderTransform = null; _line.RenderTransform = null; });
     }
 

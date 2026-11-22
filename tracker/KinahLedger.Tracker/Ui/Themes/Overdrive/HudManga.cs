@@ -700,9 +700,9 @@ sealed partial class HudManga : ModernLook
         // the big one in its grade's colour (2026-11-21 review: no bigger than the pickup's card): a balloon of the grade's
         // colour bursts behind the tile and the whole panel squashes and springs as it lands
         var gc = Rare(Values) is { } rp ? ColorOf(rp.Color, rp.Grade) : RedC;
-        var balloon = new InkArt(Drawn(dc => dc.DrawGeometry(Frozen(gc), Pn(InkB, 2.2), Balloon(P(0, 0), 25, 17, 12, 97, .85))), 0, 0);
+        var balloon = new InkArt(Drawn(dc => dc.DrawGeometry(Frozen(gc), Pn(InkB, 2.2), Balloon(P(0, 0), 31, 22, 12, 97, .72))), 0, 0);
         var bsc = new ScaleTransform(0, 0); balloon.RenderTransform = bsc;
-        fx.Children.Clear(); fx.Children.Add(balloon); fx.Children.Add(sparkle);
+        fx.Children.Clear(); fx.Children.Add(sparkle); fx.Children.Add(balloon);   // (the grade's balloon over the halftone sparkles)
         var tsc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = tsc; }
         var squash = new ScaleTransform(1, 1);
@@ -710,8 +710,8 @@ sealed partial class HudManga : ModernLook
         Motion.Play(fx, 1000, t =>
         {
             bsc.ScaleX = bsc.ScaleY = Back(Seg(t, .04, .22), 2.6) * (1 - Ez.In(Seg(t, .6, .85)));
-            squash.ScaleX = t < .06 ? 1 - .06 * Seg(t, 0, .06) : 1 + .08 * Ez.Wob(Seg(t, .06, .5), 1.5, 4);
-            squash.ScaleY = t < .06 ? 1 + .08 * Seg(t, 0, .06) : 1 - .06 * Ez.Wob(Seg(t, .06, .5), 1.5, 4);
+            // squashed to .9 for 60 ms, sprung to 1.12, settled
+            squash.ScaleX = squash.ScaleY = t < .06 ? 1 - .1 * Ez.InOut(Seg(t, 0, .06)) : t < .14 ? .9 + .22 * Out(Seg(t, .06, .14)) : 1.12 - .12 * Ez.InOut(Seg(t, .14, .42));
             double k = Out(Seg(t, 0, .45));
             sc.ScaleX = sc.ScaleY = .3 + .75 * k;
             rot.Angle = -20 + 26 * Out(t);
@@ -761,10 +761,33 @@ sealed partial class HudManga : ModernLook
         var hour = _hourTop;
         var hsc = new ScaleTransform(1, 1); var hj = new TranslateTransform();
         if (hour != null) { hour.RenderTransformOrigin = new Point(0, .6); hour.RenderTransform = new TransformGroup { Children = { hsc, hj } }; }
+        // red speed lines flashed behind the hour for three frames as it is punched (drawn once, on the bubble under the words)
+        InkArt? speed = null;
+        try
+        {
+            if (hour != null && hour.ActualWidth > 0)
+            {
+                var at = hour.TranslatePoint(new Point(0, 0), _line);
+                double hw = hour.ActualWidth, hh = hour.ActualHeight;
+                speed = new InkArt(Drawn(dc =>
+                {
+                    for (int i = 0; i < 9; i++)
+                    {
+                        double y = 3 + (hh - 6) * i / 8 + 1.5 * J(71, i), len = 18 + 26 * (J(72, i) + 1) / 2, x = -12 + (hw + 24 - len) * (J(73, i) + 1) / 2;
+                        dc.DrawGeometry(RedB, null, Streak(P(x + len, y), P(x, y), 2.2));
+                    }
+                }), hw, hh) { Opacity = 0, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(at.X, at.Y, 0, 0) };
+                _line.Children.Insert(1, speed);
+            }
+        }
+        catch (InvalidOperationException) { speed = null; }
         Motion.Play(art, 1100, t =>
         {
-            hsc.ScaleX = hsc.ScaleY = t < .3 ? 1 - .06 * Ez.InOut(Seg(t, .22, .3)) : .94 + .06 * Out(Seg(t, .3, .34)) + .12 * Ez.Wob(Seg(t, .3, .72), 1.5, 4);
-            hj.X = Ez.Jolt(Seg(t, .3, .5), 2, 6);
+            // the hit at .3: crouched before it, punched to 1.2x with a 2 px shudder over 150 ms, eased home
+            const double H = .3, P2 = .3 + .136;
+            hsc.ScaleX = hsc.ScaleY = t < H ? 1 - .06 * Ez.InOut(Seg(t, .22, H)) : t < P2 ? .94 + .26 * Back(Seg(t, H, P2), 2.2) : 1.2 - .2 * Ez.InOut(Seg(t, P2, .7));
+            hj.X = Ez.Jolt(Seg(t, H, P2), 2, 6);
+            if (speed != null) speed.Opacity = t >= H && t < H + .125 ? 1 : 0;
             _beat = false; _share = was;
             _complete = Out(Seg(t, 0, .4));
             if (t >= .4) { _beat = beat; _complete = 1; }
@@ -772,7 +795,7 @@ sealed partial class HudManga : ModernLook
             double k = Back(Seg(t, .3, .55), 2.6);
             sc.ScaleX = sc.ScaleY = k;
             balloon.Opacity = t < .8 ? 1 : 1 - Seg(t, .8, 1);
-        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); host.Children.Remove(balloon); if (hour != null) hour.RenderTransform = null; });
+        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); host.Children.Remove(balloon); if (hour != null) hour.RenderTransform = null; if (speed != null) _line.Children.Remove(speed); });
     }
 
     /// <summary>The "!!" balloon: a red explosion with an ink edge, "!!" lettered in white, round its origin.</summary>

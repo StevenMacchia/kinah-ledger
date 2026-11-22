@@ -714,11 +714,21 @@ sealed partial class HudDragon : ModernLook
         var rate = _rate?.Parent as FrameworkElement;
         var rsc = new ScaleTransform(1, 1);
         if (rate != null) { rate.RenderTransformOrigin = new Point(0, .7); rate.RenderTransform = rsc; }
+        // the ouroboros's eye lights red as the circle closes (its place in the ring's art: OuroborosHead)
+        double ec = 52 / 2.0, eR = ec - 7, ea = 340 * Math.PI / 180, ek = .42;
+        var eyeAt = new Point(ec + eR * Math.Sin(ea) - 30 * ek + EyeAt.X * ek, ec - eR * Math.Cos(ea) - 46 * ek + EyeAt.Y * ek);
+        var eyeSc = new ScaleTransform(.4, .4, 9, 7);
+        var eye = new Ellipse { Width = 18, Height = 14, Fill = Glow(Color.FromRgb(0xFF, 0x2A, 0x14), 1), Opacity = 0, IsHitTestVisible = false, RenderTransform = eyeSc,
+            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(eyeAt.X - 9, eyeAt.Y - 7, 0, 0) };
+        host.Children.Add(eye);
         Motion.Play(art, 1800, t =>
         {
             foreach (var (e, s, at) in waves) { double u = Seg(t, at, at + .4); s.ScaleX = s.ScaleY = .1 + 4.2 * Out(u); e.Opacity = u <= 0 || u >= 1 ? 0 : (1 - u); }
             foreach (var (e, tr, v, at) in motes) { double u = Seg(t, at, at + .38); var q = Out(u); tr.X = v.X * q; tr.Y = v.Y * q + 10 * u * u; e.Opacity = u <= 0 || u >= 1 ? 0 : Math.Min(1, 4 * u) * (1 - u); }
-            rsc.ScaleX = rsc.ScaleY = 1 + .1 * Ez.Wob(Seg(t, .28, .7), 1.5, 4);
+            // the eye lights as the flame nears the head, blazing at the hit; the hour punched to 1.15x over ~120 ms, eased home
+            eye.Opacity = t < .18 ? 0 : t < .3 ? Seg(t, .18, .3) : 1 - Seg(t, .45, .75);
+            eyeSc.ScaleX = eyeSc.ScaleY = t < .3 ? .4 + .6 * Seg(t, .18, .3) : 1 + .5 * Ez.Pulse(Seg(t, .3, .45), .3);
+            rsc.ScaleX = rsc.ScaleY = t < .3 ? 1 - .05 * Ez.InOut(Seg(t, .25, .3)) : t < .367 ? .95 + .2 * Back(Seg(t, .3, .367), 2.2) : 1.15 - .15 * Ez.InOut(Seg(t, .367, .6));
             _beat = false; _share = was;
             double run = Out(Seg(t, 0, .3));
             _complete = run;
@@ -733,7 +743,7 @@ sealed partial class HudDragon : ModernLook
             RaceAt(race, _line.ActualWidth, Seg(t, .15, .7));
         }, () =>
         {
-            host.Children.Remove(burst); host.Children.Remove(halo); host.Children.Remove(orbit); _lineFx.Children.Remove(race); _complete = 0; _beat = beat; art.InvalidateVisual();
+            host.Children.Remove(burst); host.Children.Remove(halo); host.Children.Remove(orbit); host.Children.Remove(eye); _lineFx.Children.Remove(race); _complete = 0; _beat = beat; art.InvalidateVisual();
             foreach (var (e, _, _) in waves) _lineFx.Children.Remove(e);
             foreach (var (e, _, _, _) in motes) _lineFx.Children.Remove(e);
             if (rate != null) rate.RenderTransform = null;
