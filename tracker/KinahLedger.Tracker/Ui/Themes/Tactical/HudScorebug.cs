@@ -552,7 +552,9 @@ sealed partial class HudScorebug : TacticalLook
         {
             double a = Out(Seg(t, 0, .26)), b = Seg(t, .84, 1); b = b * b;
             row.Clip = Wipe(w * b, w * a, 30);
-            LootUnder(Seg(t, 0, .12) * (1 - Seg(t, .9, 1)));
+            row.Opacity = t <= 0 ? 0 : 1;
+            // what hangs under the bug (the pickups, a run's splits) steps aside at once while the ticker is over it
+            LootUnder(Seg(t, 0, .03) * (1 - Seg(t, .985, 1)));
             yb.Sweep = Seg(t, .22, .62); yb.Art.InvalidateVisual();
         }, () => { _bugAnchor.Children.Remove(row); LootUnder(0); });
     }
@@ -613,7 +615,8 @@ sealed partial class HudScorebug : TacticalLook
             Pop(hp, t, .12, .32, .12);
             double i = Out(Seg(t, 0, .2)), o = Seg(t, .86, 1); o = o * o;
             row.Clip = Wipe(w * o, w * i, 34);
-            LootUnder(Seg(t, 0, .1) * (1 - Seg(t, .92, 1)));
+            row.Opacity = t <= 0 ? 0 : 1;
+            LootUnder(Seg(t, 0, .03) * (1 - Seg(t, .985, 1)));
             words.Sweep = Seg(t, .16, .5); words.Art.InvalidateVisual();
             star.Sweep = Seg(t, .1, .36); star.Art.InvalidateVisual();
         }, () => { _bugAnchor.Children.Remove(row); LootUnder(0); hour?.ClearValue(UIElement.RenderTransformProperty); });
@@ -629,7 +632,7 @@ sealed partial class HudScorebug : TacticalLook
     {
         var blk = _timerBlock as Grid;
         var sc = new ScaleTransform(1, 1);
-        if (blk != null) { blk.RenderTransformOrigin = new Point(0, .5); blk.RenderTransform = sc; }
+        if (blk != null) { blk.RenderTransformOrigin = new Point(0, 0); blk.RenderTransform = sc; }
         Motion.Play(_timerEdge, 1500, t =>
         {
             // the block cuts in from its left edge past its width and settles, then a light crosses it and its edge rings out

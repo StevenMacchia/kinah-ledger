@@ -466,13 +466,25 @@ sealed partial class HudCorrupt : HudThemeLook, IThemeCard
             smear.Children.Add(r);
             strips.Add((r, lens[k]));
         }
+        // the room to the panel's left edge (or its right, inside the fight), so a strip is never cut at the window's edge
+        double room = 1000;
+        try
+        {
+            var host = KinahHidden ? _cam.Root : _deck.Root;
+            if (block.IsDescendantOf(host) && host.ActualWidth > 0)
+            {
+                double x0 = block.TranslatePoint(new Point(0, 0), host).X;
+                room = Math.Max(0, right ? host.ActualWidth - x0 - w - 2 : x0 - 2);
+            }
+        }
+        catch (InvalidOperationException) { }
         Motion.Play(smear, 1100, t =>
         {
             double q = 1 - Motion.Out(Math.Clamp(t / .85, 0, 1));
             int s = (int)(t * 16);
             foreach (var (r, len) in strips)
             {
-                double l = len * q * (s % 3 == 0 ? 1.15 : 1);
+                double l = Math.Min(len * q * (s % 3 == 0 ? 1.15 : 1), room);
                 r.Width = Math.Max(0, l);
                 Canvas.SetLeft(r, right ? w : -l);
             }
