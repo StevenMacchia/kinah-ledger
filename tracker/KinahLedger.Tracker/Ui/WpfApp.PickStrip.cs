@@ -69,7 +69,7 @@ public static partial class WpfApp
             return P(v, 4);
         }
         var warming = new Dictionary<string, string>(kinah) { ["warm"] = "1", ["rate"] = "warming up", ["time"] = "RUN 0:48", ["total"] = "21.4K", ["chase"] = "", ["toBest"] = "" };
-        var best = new Dictionary<string, string>(kinah) { ["chase"] = "1.000", ["toBest"] = "New best here", ["rate"] = "1.52M" };
+        var best = new Dictionary<string, string>(kinah) { ["chase"] = "1.000", ["toBest"] = L.T("New best here"), ["rate"] = "1.52M" };
         var notice = new Dictionary<string, string>(kinah) { ["paused"] = "Paused: Chrome covers the chat", ["show"] = "dim" };
         var wide = new Dictionary<string, string>(kinah) { ["rate"] = "12.84M", ["total"] = "184.27M", ["kinah"] = "9.12M", ["loot"] = "3.72M", ["toBest"] = "1.27M to your best here", ["time"] = "RUN 11:42:17" };
         return new()

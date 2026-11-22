@@ -434,8 +434,13 @@ public static class PriceBook
                 {
                     // ...unless it is a joke against the region: over 5x the other servers' middle is not a price (2026-11-21: Siel's
                     // Forgotten Gloves, one ask at 10,000,999 against 1,000 on 2 servers, put 8.8M into a gathering hour)
+                    // With no other server to hold it against, a set-aside ask is no price unless the server's own week backs it:
+                    // a 7-day middle of at least two readings it is within 5x of (2026-11-21: Siel's Shade Helm, one ask at
+                    // 30,000,013, no region price, would have counted about 26.4M)
+                    bool hasRegion = region is long rr && rr > 0 && regionN >= 1;
                     if (e.TryGetProperty("dropped", out var dr) && dr.ValueKind == JsonValueKind.Object && Num(dr, "price") is long dp && dp > 0
-                        && !(region is long rp && rp > 0 && regionN >= 1 && dp > rp * JokeOverRegion))
+                        && (hasRegion ? dp <= region!.Value * JokeOverRegion
+                            : Num(e, "median_7d") is long wk && wk > 0 && (Num(e, "n_obs") ?? 0) >= 2 && dp <= wk * JokeOverRegion))
                         d[name] = new BoardQuote(dp, From.Feed, (int)(Num(e, "listings") ?? 0), false, Time(e, "lowest_seen_at"), region, regionN, Picked: true);
                     continue;
                 }

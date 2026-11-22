@@ -57,7 +57,13 @@ public partial class MainWindow
     /// <summary>The Abyss's hours this session: the farming time in the places its points or Rank Points came from. What its rates divide by.</summary>
     /// (2026-11-21 audit: over the farming time there, as the Kinah hour is, and read from the locked snapshot: walking into a new
     /// zone while the raw counters were read could throw)
-    internal static double AbyssHours(SessionEngine e) => e.ZoneSnapshot().Values.Where(z => z.AbyssPoints > 0 || z.RankPoints > 0 || z.RankLost > 0).Sum(z => z.Active) / 3600;
+    internal static double AbyssHours(SessionEngine e)
+    {
+        var abyss = e.ZoneSnapshot().Values.Where(z => z.AbyssPoints > 0 || z.RankPoints > 0 || z.RankLost > 0).ToList();
+        double active = abyss.Sum(z => z.Active);
+        // under a minute of farming time counted there (an old session's counters, a record without it): the time there
+        return (active >= 60 ? active : abyss.Sum(z => z.Seconds)) / 3600;
+    }
 
     /// <summary>An Abyss hour from its first minutes swings wildly: said as warming up until this long there.</summary>
     internal const double AbyssWarmMinutes = 3;

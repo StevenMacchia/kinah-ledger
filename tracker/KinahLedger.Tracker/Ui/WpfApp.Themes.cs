@@ -176,7 +176,7 @@ public static partial class WpfApp
         var abyssWaiting = new Dictionary<string, string>(abyss) { ["rate"] = "", ["total"] = "", ["feedRate"] = "", ["abPvp"] = "", ["abKills"] = "2", ["abRank"] = "", ["abDeaths"] = "", ["time"] = "RUN 0:48" };
         var notice = new Dictionary<string, string>(kinah) { ["paused"] = "Paused: Chrome covers the chat", ["show"] = "dim" };
         var warming = new Dictionary<string, string>(kinah) { ["warm"] = "1", ["rate"] = "warming up", ["time"] = "RUN 0:48", ["total"] = "21.4K", ["chase"] = "", ["toBest"] = "" };
-        var best = new Dictionary<string, string>(kinah) { ["chase"] = "1.000", ["toBest"] = "New best here", ["rate"] = "1.52M" };
+        var best = new Dictionary<string, string>(kinah) { ["chase"] = "1.000", ["toBest"] = L.T("New best here"), ["rate"] = "1.52M" };
         var idle = new Dictionary<string, string>(kinah) { ["run"] = "", ["time"] = "0:00", ["rate"] = "", ["total"] = "0", ["chase"] = "", ["toBest"] = "", ["idle"] = MainWindow.IdleSample(), ["idleShort"] = MainWindow.IdleShortSample() };
         foreach (var k in idle.Keys.Where(k => k.StartsWith("pick") || k.StartsWith("top")).ToList()) idle[k] = "";
         var rare = new Dictionary<string, string>(kinah)

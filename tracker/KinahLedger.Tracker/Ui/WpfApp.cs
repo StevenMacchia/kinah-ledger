@@ -994,9 +994,12 @@ public static partial class WpfApp
         var abyssHud = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         foreach (var (k, v) in w.HudFarmFeedForTest()) abyssHud[k] = v;
         string apKinah = abyssLine[2][..^" Kinah".Length];
-        Check(abyssHud.GetValueOrDefault("abyss") == "1" && abyssHud.GetValueOrDefault("rate") == apHour && abyssHud.GetValueOrDefault("total") == Amounts.Short(24_740)
+        // the overlay's hour is over the time in the Abyss up to its own draw, a few milliseconds past the hero's: one point either way
+        static double ApNum(string x) => double.TryParse(x.Replace(",", ""), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : -1;
+        string apHud = abyssHud.GetValueOrDefault("rate", "") is var hr && Math.Abs(ApNum(hr) - ApNum(apHour)) <= 2 ? hr : apHour;
+        Check(abyssHud.GetValueOrDefault("abyss") == "1" && abyssHud.GetValueOrDefault("rate") == apHud && abyssHud.GetValueOrDefault("total") == Amounts.Short(24_740)
             && abyssHud.GetValueOrDefault("abPvp") == "9" && abyssHud.GetValueOrDefault("abKills") == "118" && abyssHud.GetValueOrDefault("abDeaths") == "2" && abyssHud.GetValueOrDefault("abKinah") == apKinah
-            && abyssHud.GetValueOrDefault("chase") == "" && abyssHud.GetValueOrDefault("best") == "" && abyssHud.GetValueOrDefault("feedRate") == apHour && abyssHud.GetValueOrDefault("feedUnit") == "AP an hour",
+            && abyssHud.GetValueOrDefault("chase") == "" && abyssHud.GetValueOrDefault("best") == "" && abyssHud.GetValueOrDefault("feedRate") == apHud && abyssHud.GetValueOrDefault("feedUnit") == "AP an hour",
             "the Kinah overlay in the Abyss: " + string.Join(", ", new[] { "abyss", "rate", "total", "abPvp", "abKills", "abDeaths", "abKinah", "chase", "best", "feedRate", "feedUnit" }.Select(k => $"{k}={abyssHud.GetValueOrDefault(k)}")));
         var kinahHourInAbyss = abyssHero.Ticket.Split(' ')[0];   // the Kinah and loot hour, on the ticket: never the overlay's figure there
         foreach (var look in HudLooks.All.Select(l => l.Key))
@@ -1010,8 +1013,8 @@ public static partial class WpfApp
             // Pop's pill has room for the hour and the points; the others say the kills, deaths and Kinah too
             bool stats = look == HudLooks.Ticker || words.Contains("9 PvP") && words.Contains("2 deaths") && words.Contains(apKinah + " Kinah");
             // Badge's one line is the newest pickup and the hour (no session total there out of the Abyss either)
-            Check(all.Contains(apHour) && words.Contains("AP") && (look == HudLooks.Strip || all.Contains(Amounts.Short(24_740))) && !all.Contains(kinahHourInAbyss) && !all.Contains("of best", StringComparison.OrdinalIgnoreCase) && !all.Contains("DPS") && stats,
-                $"...{HudLooks.All.First(l => l.Key == look).Name} leads with {apHour} AP an hour, {Amounts.Short(24_740)} AP, the kills, deaths and Kinah{(look == HudLooks.Ticker ? " (the pill: the hour and the points)" : look == HudLooks.Strip ? " (the feed's line: no total)" : "")}: {all}");
+            Check(all.Contains(apHud) && words.Contains("AP") && (look == HudLooks.Strip || all.Contains(Amounts.Short(24_740))) && !all.Contains(kinahHourInAbyss) && !all.Contains("of best", StringComparison.OrdinalIgnoreCase) && !all.Contains("DPS") && stats,
+                $"...{HudLooks.All.First(l => l.Key == look).Name} leads with {apHud} AP an hour, {Amounts.Short(24_740)} AP, the kills, deaths and Kinah{(look == HudLooks.Ticker ? " (the pill: the hour and the points)" : look == HudLooks.Strip ? " (the feed's line: no total)" : "")}: {all}");
             ha.Close();
         }
         w.ShowDemo(); DoEvents();

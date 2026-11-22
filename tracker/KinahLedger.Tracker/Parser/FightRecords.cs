@@ -92,7 +92,9 @@ public sealed class FightRecords
     /// Stage 6 of one boss are two records, and a kill whose stage isn't known is never measured against either.
     /// </summary>
     public static bool Counts(Encounter e) => e.ModeKind == ParserMode.Bosses && !e.Live && !e.Wave && e.Outcome == "kill"
-        && (e.Boss.Length > 0 || e.BossId > 0) && e.You is { Damage: > 0 } && TierKnown(e);
+        && (e.Boss.Length > 0 || e.BossId > 0) && e.You is { Damage: > 0 } && TierKnown(e)
+        // a kill seen only in part is no fastest kill nor best DPS (2026-11-17 23:24: Gadioton, 7.6M of 18.576M seen, in 36 s)
+        && !e.PartialWhy.Contains(BossParser.KillUnseenWhy);
 
     /// <summary>A Nightmare pull's stage ("Stage 4") or an Ascension Trial's difficulty or tier is known; any other kind needs none.</summary>
     public static bool TierKnown(Encounter e) => Encounter.KindOf(e.Kind) switch
