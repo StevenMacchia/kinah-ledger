@@ -227,6 +227,8 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         if (!HasHour(f))
         {
             words.Children.Add(Tt(Waiting(f.Abyss), 14, Soft, FontWeights.SemiBold));
+            // in the Abyss, what's already counted ("2 kills · 266.5K Kinah") under it: information, not emptiness (Steven, 2026-11-21)
+            if (f.Abyss && f.Stats.Count > 0) words.Children.Add(Sub(f, false));
         }
         else
         {
@@ -543,54 +545,197 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
     }
 
     // ================================================================ the moments
+    //
+    // Glass's moments are light on glass (2026-11-21, "cinematic ... keeping it light"): bands of specular light sweeping
+    // the panes, a lens's four-point glint, soft blooms and rings of colour, and a glass plate that lands with a small scale
+    // punch. Each part is drawn once and moved by its transforms (Ui/Themes/Modern/ModernFx.cs); the panes never redraw.
 
-    /// <summary>A pickup: a band of light sweeps the glass, and the pickup's worth glows on its line for a moment.</summary>
+    static readonly Color FrostC = Color.FromRgb(0xE8, 0xF1, 0xFF);
+
+    /// <summary>A pickup: one quiet band of light crosses the Buddy's glass and its top edge catches the light.</summary>
     protected override void Pickup(Pick p, bool held)
     {
         if (KinahHidden || _line.Visibility != Visibility.Visible) return;
-        Motion.Play(_lineGlass, 1100, t => { _sheen = Out(t); _lineGlass.InvalidateVisual(); }, () => { _sheen = -1; _lineGlass.InvalidateVisual(); });
-    }
-
-    /// <summary>A rare drop: a ring of its colour spreads out from the tile and fades.</summary>
-    protected override void RareDrop(Pick p, bool held)
-    {
-        if (_rareRing is not { } ring) return;
-        Motion.Play(ring, 1400, t => { _rarePulse = Seg(t, 0, .8); ring.InvalidateVisual(); }, () => { _rarePulse = -1; ring.InvalidateVisual(); });
-    }
-
-    /// <summary>Your best passed: the ring's arc runs on round to full, a point of light at its head, and turns green.</summary>
-    protected override void BestPassed(bool held)
-    {
-        if (_ring == null || _ringArt == null) return;
-        var art = _ringArt;
-        double was = _share is > 0 and < 1 ? _share : .82;
-        bool beat = _beat;
-        Motion.Play(art, 1600, t =>
+        var lb = ModFx.In(_line, _root);
+        if (lb.IsEmpty) return;
+        var layer = FxLayer("pickup", _root, ClipOf(lb, Radius));
+        double h = lb.Height;
+        var band = ModFx.Band(30, h, FrostC, .18, h * .45);
+        var bx = new ModFx.Xf(band);
+        ModFx.Put(layer, band, lb.Left - 30 - h * .45, lb.Top);
+        var rim = ModFx.Block(Math.Max(1, lb.Width - Radius), 1.4, Mod.Grad(false, (Mod.A(Colors.White, 0), 0), (Mod.A(Colors.White, .8), .5), (Mod.A(Colors.White, 0), 1)));
+        var rx = new ModFx.Xf(rim);
+        ModFx.Put(layer, rim, lb.Left + Radius / 2, lb.Top + 1);
+        Motion.Play(layer, 850, t =>
         {
-            _beat = false; _share = was;
-            _complete = Out(Seg(t, 0, .55));
-            _glint = t < .6 ? Seg(t, 0, .6) : -1;
-            if (t >= .6) { _beat = beat; _complete = 1; }
-            art.InvalidateVisual();
-        }, () => { _complete = 0; _glint = -1; _beat = beat; art.InvalidateVisual(); });
-    }
-
-    /// <summary>An entry opened: the green chip breathes in its colour twice.</summary>
-    protected override void EntryOpened(TimerBoard.Item i, bool held)
-    {
-        if (_chips.FirstOrDefault() is not Grid chip || chip.Children[0] is not TacSketch art) return;
-        Motion.Play(chip, 1600, t => { _breath = Math.Sin(Math.PI * 2 * Math.Clamp(t, 0, 1)) is var s && s > 0 ? s : -s; art.InvalidateVisual(); }, () => { _breath = 0; art.InvalidateVisual(); });
-    }
-
-    /// <summary>A fight started: its panel settles in, rising a few pixels as it fades up.</summary>
-    protected override void FightStarted(Encounter e, bool held)
-    {
-        Motion.Play(_fight, 420, t => { double k = Out(t); _settle.Y = 6 * (1 - k); _fight.Opacity = .2 + .8 * k; }, () => { _settle.Y = 0; _fight.Opacity = 1; });
+            bx.T.X = (lb.Width + 30 + h * .45) * ModFx.InOut(Seg(t, 0, .9));
+            band.Opacity = ModFx.Life(t, 0, .12, .75, .92);
+            rim.Opacity = ModFx.Bell(Seg(t, .05, .7));
+            rx.S.ScaleX = .3 + .7 * Out(Seg(t, .05, .5));
+        }, () => FxDone("pickup", layer));
     }
 
     /// <summary>
-    /// A fight ended: a frosted pill saying how ("Killed 12:47", "Wiped") settles over the header line for a moment, lit in
-    /// its colour, and fades. It sits on the boss and the clock (which say the same) and never over the rows.
+    /// A rare drop, the big one, in its grade's colour: the tile gathers and pops, two rings of the colour burst out of it, a
+    /// band of the colour sweeps the whole Buddy, and four glints flash round the tile one after another.
+    /// </summary>
+    protected override void RareDrop(Pick p, bool held)
+    {
+        if (_rareTile is not { } tile) return;
+        var tb = ModFx.In(tile, _root); var lb = ModFx.In(_line, _root);
+        if (tb.IsEmpty || lb.IsEmpty) return;
+        var c = ColorOf(p.Color, p.Grade);
+        var hot = Mod.Mix(c, Colors.White, .45);
+        var layer = FxLayer("rare", _root);
+        var mid = new Point(tb.Left + tb.Width / 2, tb.Top + 18);
+        // the band of colour, clipped to the glass
+        var pane = ModFx.Put(layer, new Canvas { Clip = ClipOf(lb, Radius) }, 0, 0);
+        double h = lb.Height;
+        var band = ModFx.Band(64, h, c, .24, h * .5);
+        var bx = new ModFx.Xf(band);
+        ModFx.Put(pane, band, lb.Left - 64 - h * .5, lb.Top);
+        var bloom = ModFx.Centre(layer, ModFx.Bloom(c, 72, 72, .38), mid);
+        var blx = new ModFx.Xf(bloom);
+        var r1 = ModFx.Centre(layer, ModFx.Ring(c, 32, 2.4), mid);
+        var r2 = ModFx.Centre(layer, ModFx.Ring(hot, 32, 1.2), mid);
+        var x1 = new ModFx.Xf(r1); var x2 = new ModFx.Xf(r2);
+        var at = new (double X, double Y, double R)[] { (-17, -12, 8), (21, -13, 10), (25, 12, 7), (-12, 15, 9) };
+        var glints = at.Select(g => (El: ModFx.Centre(layer, ModFx.Glint(hot, g.R), new Point(mid.X + g.X, mid.Y + g.Y)), X: (ModFx.Xf?)null)).ToList();
+        for (int i = 0; i < glints.Count; i++) glints[i] = (glints[i].El, new ModFx.Xf(glints[i].El));
+        var tx = new ModFx.Xf(tile);
+        Motion.Play(layer, 1700, t =>
+        {
+            // the tile: a short gather, then the pop past its size and the settle
+            tx.Scale = t < .06 ? 1 - .16 * ModFx.In(Seg(t, 0, .06)) : ModFx.Punch(Seg(t, .06, .4), .84, 2.6);
+            double a = Seg(t, .06, .55), b = Seg(t, .16, .72);
+            x1.Scale = 1 + 1.1 * Out(a); r1.Opacity = a <= 0 || a >= 1 ? 0 : .95 * (1 - a);
+            x2.Scale = 1 + 1.3 * Out(b); r2.Opacity = b <= 0 || b >= 1 ? 0 : .8 * (1 - b);
+            blx.Scale = .5 + .5 * Out(Seg(t, .04, .5)); bloom.Opacity = ModFx.Life(t, .04, .12, .3, .7);
+            bx.T.X = (lb.Width + 64 + h * .5) * ModFx.InOut(Seg(t, .1, .62));
+            band.Opacity = ModFx.Life(t, .1, .18, .5, .62);
+            for (int i = 0; i < glints.Count; i++)
+            {
+                double g = Seg(t, .12 + .08 * i, .42 + .08 * i);
+                glints[i].X!.Scale = ModFx.Bell(g); glints[i].X!.R.Angle = 70 * g;
+                glints[i].El.Opacity = g <= 0 || g >= 1 ? 0 : 1;
+            }
+        }, () => { tx.Scale = 1; FxDone("rare", layer); });
+    }
+
+    /// <summary>
+    /// Your best passed: the ring's arc runs on round to full with a point of light at its head and turns green; as it
+    /// closes the ring punches, a green bloom and a halo go out from it, a glint flares on its rim and a green light
+    /// sweeps the Buddy's glass.
+    /// </summary>
+    protected override void BestPassed(bool held)
+    {
+        if (_ring == null || _ringArt == null) return;
+        var art = _ringArt; var ring = _ring;
+        double was = _share is > 0 and < 1 ? _share : .82;
+        bool beat = _beat;
+        var rb = ModFx.In(ring, _root); var lb = ModFx.In(_line, _root);
+        Canvas? layer = null;
+        FrameworkElement? bloom = null, halo = null, glint = null, band = null;
+        ModFx.Xf? blx = null, hx = null, gx = null, bx = null;
+        if (!rb.IsEmpty && !lb.IsEmpty)
+        {
+            layer = FxLayer("best", _root);
+            var mid = new Point(rb.Left + rb.Width / 2, rb.Top + rb.Height / 2);
+            var pane = ModFx.Put(layer, new Canvas { Clip = ClipOf(lb, Radius) }, 0, 0);
+            band = ModFx.Band(56, lb.Height, GreenC, .17, lb.Height * .45);
+            bx = new ModFx.Xf(band);
+            ModFx.Put(pane, band, lb.Left - 56 - lb.Height * .45, lb.Top);
+            bloom = ModFx.Centre(layer, ModFx.Bloom(GreenC, 76, 76, .42), mid); blx = new ModFx.Xf(bloom);
+            halo = ModFx.Centre(layer, ModFx.Halo(MintC, 50, .85), mid); hx = new ModFx.Xf(halo);
+            glint = ModFx.Centre(layer, ModFx.Glint(PaleGreenC, 15), new Point(mid.X + 15, mid.Y - 15)); gx = new ModFx.Xf(glint);
+        }
+        var rx = new ModFx.Xf(ring);
+        Motion.Play(art, 1800, t =>
+        {
+            _beat = false; _share = was;
+            _complete = Out(Seg(t, 0, .5));
+            _glint = t < .55 ? Seg(t, 0, .55) : -1;
+            if (t >= .55) { _beat = beat; _complete = 1; }
+            art.InvalidateVisual();
+            rx.Scale = 1 + .13 * ModFx.Bell(Out(Seg(t, .5, .78)));
+            if (layer != null)
+            {
+                double k = Seg(t, .5, .9);
+                blx!.Scale = .5 + .5 * Out(k); bloom!.Opacity = ModFx.Life(t, .5, .56, .62, .95);
+                double hk = Seg(t, .52, .92);
+                hx!.Scale = 1 + .5 * Out(hk); halo!.Opacity = hk <= 0 || hk >= 1 ? 0 : 1 - hk;
+                double gk = Seg(t, .52, .86);
+                gx!.Scale = ModFx.Bell(gk); gx.R.Angle = 90 * gk; glint!.Opacity = gk <= 0 || gk >= 1 ? 0 : 1;
+                bx!.T.X = (lb.Width + 56 + lb.Height * .45) * ModFx.InOut(Seg(t, .55, .98));
+                band!.Opacity = ModFx.Life(t, .55, .62, .88, .98);
+            }
+        }, () => { _complete = 0; _glint = -1; _beat = beat; art.InvalidateVisual(); rx.Scale = 1; if (layer != null) FxDone("best", layer); });
+    }
+
+    /// <summary>
+    /// An entry opened: the green chip arrives with a beat (a scale punch as it lights), a glint of light crosses it, and
+    /// two green outlines ping out from it.
+    /// </summary>
+    protected override void EntryOpened(TimerBoard.Item i, bool held)
+    {
+        if (_chips.FirstOrDefault() is not Grid chip) return;
+        var cb = ModFx.In(chip, _root);
+        if (cb.IsEmpty) return;
+        var layer = FxLayer("entry", _root);
+        var pane = ModFx.Put(layer, new Canvas { Clip = ClipOf(cb, cb.Height / 2) }, 0, 0);
+        var flash = ModFx.Put(pane, ModFx.Outline(cb, cb.Height / 2, GreenC, 0, 0, Mod.Br(GreenC, .32)), cb.Left, cb.Top);
+        var band = ModFx.Band(16, cb.Height, Colors.White, .55, cb.Height * .6);
+        var bx = new ModFx.Xf(band);
+        ModFx.Put(pane, band, cb.Left - 16 - cb.Height * .6, cb.Top);
+        var pings = new[] { .18, .4 }.Select(at => (At: at, El: ModFx.Put(layer, ModFx.Outline(cb, cb.Height / 2, GreenC, 1.4), cb.Left, cb.Top))).ToList();
+        var px = pings.Select(pg => new ModFx.Xf(pg.El)).ToList();
+        var cx = new ModFx.Xf(chip);
+        Motion.Play(layer, 1300, t =>
+        {
+            cx.Scale = ModFx.Punch(Seg(t, 0, .3), .82, 2.4);
+            chip.Opacity = .25 + .75 * Seg(t, 0, .1);
+            flash.Opacity = ModFx.Life(t, .06, .14, .2, .55);
+            bx.T.X = (cb.Width + 16 + cb.Height * .6) * ModFx.InOut(Seg(t, .14, .5));
+            for (int k = 0; k < pings.Count; k++)
+            {
+                double q = Seg(t, pings[k].At, pings[k].At + .45);
+                px[k].S.ScaleX = 1 + 18 * Out(q) / cb.Width; px[k].S.ScaleY = 1 + 18 * Out(q) / cb.Height;
+                pings[k].El.Opacity = q <= 0 || q >= 1 ? 0 : .85 * (1 - q);
+            }
+        }, () => { cx.Scale = 1; chip.Opacity = 1; FxDone("entry", layer); });
+    }
+
+    /// <summary>
+    /// A fight started: its pane rises a few pixels into place as it fades up, its rows come up one after another, and a
+    /// wide band of specular light sweeps across the glass.
+    /// </summary>
+    protected override void FightStarted(Encounter e, bool held)
+    {
+        var fb = ModFx.In(_fight, _root);
+        var rows = RowRoots();
+        Canvas? layer = null; FrameworkElement? band = null; ModFx.Xf? bx = null;
+        if (!fb.IsEmpty)
+        {
+            fb.Y -= _settle.Y;
+            layer = FxLayer("start", _root, ClipOf(fb, Radius));
+            band = ModFx.Band(84, fb.Height, FrostC, .13, fb.Height * .35);
+            bx = new ModFx.Xf(band);
+            ModFx.Put(layer, band, fb.Left - 84 - fb.Height * .35, fb.Top);
+        }
+        Motion.Play(_fight, 1100, t =>
+        {
+            double k = Out(Seg(t, 0, .35));
+            _settle.Y = 8 * (1 - k); _fight.Opacity = .15 + .85 * k;
+            for (int i = 0; i < rows.Count; i++) rows[i].Opacity = .1 + .9 * Out(Seg(t, .12 + .07 * i, .42 + .07 * i));
+            if (bx != null) { bx.T.X = (fb.Width + 84 + fb.Height * .35) * ModFx.InOut(Seg(t, .18, .8)); band!.Opacity = ModFx.Life(t, .18, .26, .7, .8); }
+        }, () => { _settle.Y = 0; _fight.Opacity = 1; foreach (var r in rows) r.Opacity = 1; if (layer != null) FxDone("start", layer); });
+    }
+
+    /// <summary>
+    /// A fight ended. A kill: a frosted plate saying how and when lands over the header with a small scale punch, a glint of
+    /// light crosses it, a green hairline opens out under it from its middle, glints flash at its ends and a green light
+    /// sweeps the pane. A wipe: the plate drops in red, heavy, the pane shudders, a red veil passes over it and the rows
+    /// dim, the red hairline closes in. It sits on the boss and the clock (which say the same), never over the rows.
     /// </summary>
     protected override void FightEnded(Encounter e, bool held)
     {
@@ -612,8 +757,7 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
         words.Children.Add(Tt(OutcomeText(e), 16, wipe ? Frozen(Mod.Mix(RedC, Colors.White, .3)) : Mint, FontWeights.Bold));
         words.Children.Add(Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 15, White, FontWeights.SemiBold));
         plate.Children.Add(words);
-        var sc = new ScaleTransform(1, 1);
-        plate.RenderTransformOrigin = new Point(.5, .5); plate.RenderTransform = sc;
+        var px = new ModFx.Xf(plate);
         _fightFx.Children.Clear(); _fightFx.Children.Add(plate);
         // over the header as laid out now (the timers can sit above it in a dungeon), a few px proud of it each way
         void Seat()
@@ -627,12 +771,76 @@ sealed partial class HudModernGlass : ModernLook, IThemeCard
             plate.Height = h + 8;
         }
         Seat();
+        // the plate's box on the look's layer, from the header's (the plate itself isn't laid out yet)
+        var fb = ModFx.In(_fight, _root);
+        var hb = _head != null ? ModFx.In(_head, _root) : Rect.Empty;
+        var rows = RowRoots();
+        Canvas? layer = null;
+        FrameworkElement? band = null, hair = null, veil = null; ModFx.Xf? bx = null, hx = null;
+        var glints = new List<(FrameworkElement El, ModFx.Xf X, double At)>();
+        double glintRun = 0;
+        if (!fb.IsEmpty && !hb.IsEmpty)
+        {
+            var pb = new Rect(fb.Left + Pad - 4, hb.Top - 4, fb.Width - 2 * (Pad - 4), hb.Height + 8);
+            layer = FxLayer("end", _root);
+            if (!wipe)
+            {
+                var plane = ModFx.Put(layer, new Canvas { Clip = ClipOf(pb, pb.Height / 2) }, 0, 0);
+                var glint = ModFx.Band(34, pb.Height, Colors.White, .5, pb.Height * .7);
+                var gxf = new ModFx.Xf(glint);
+                ModFx.Put(plane, glint, pb.Left - 34 - pb.Height * .7, pb.Top);
+                glints.Add((glint, gxf, -1));
+                glintRun = pb.Width + 34 + pb.Height * .7;
+                var pane = ModFx.Put(layer, new Canvas { Clip = ClipOf(fb, Radius) }, 0, 0);
+                band = ModFx.Band(110, fb.Height, GreenC, .09, fb.Height * .4);
+                bx = new ModFx.Xf(band);
+                ModFx.Put(pane, band, fb.Left - 110 - fb.Height * .4, fb.Top);
+                foreach (var (x, at) in new[] { (pb.Left + 16, .14), (pb.Right - 16, .22) })
+                {
+                    var g = ModFx.Centre(layer, ModFx.Glint(PaleGreenC, 11), new Point(x, pb.Top + pb.Height / 2));
+                    glints.Add((g, new ModFx.Xf(g), at));
+                }
+            }
+            else veil = ModFx.Put(layer, ModFx.Outline(fb, Radius, RedC, 0, 0, Mod.Br(RedC, .13)), fb.Left, fb.Top);
+            hair = ModFx.Put(layer, ModFx.Block(pb.Width - 40, 1.4, Mod.Grad(false, (Mod.A(c, 0), 0), (Mod.A(c, .95), .5), (Mod.A(c, 0), 1))), pb.Left + 20, pb.Bottom + 2);
+            hx = new ModFx.Xf(hair);
+        }
         Motion.Play(_fightFx, 2400, t =>
         {
             Seat();
-            double i = Out(Seg(t, 0, .15)), o = Seg(t, .8, 1);
-            plate.Opacity = i * (1 - o);
-            sc.ScaleX = sc.ScaleY = .96 + .04 * i;
-        }, () => _fightFx.Children.Clear());
+            // the exit: quick, a touch smaller, so the header comes back clean
+            double o = Seg(t, .8, .86);
+            if (!wipe)
+            {
+                // the plate lands: from a touch small, past its size, settled
+                px.Scale = t < .8 ? ModFx.Punch(Seg(t, 0, .18), .9, 2.2) : 1 - .04 * o;
+                px.T.Y = 0;
+                plate.Opacity = Seg(t, 0, .07) * (1 - o);
+            }
+            else
+            {
+                // the plate drops in heavy, then the pane shudders
+                double d = Out(Seg(t, 0, .13));
+                px.T.Y = -12 * (1 - d); px.Scale = 1;
+                px.T.X = ModFx.Shake(Seg(t, .1, .42), 2.5, 3);
+                _settle.X = ModFx.Shake(Seg(t, .1, .42), 3, 3);
+                plate.Opacity = Seg(t, 0, .08) * (1 - o);
+                if (veil != null) veil.Opacity = ModFx.Life(t, .1, .16, .3, .62);
+                foreach (var r in rows) r.Opacity = 1 - .42 * ModFx.Life(t, .12, .24, .48, .78);
+            }
+            foreach (var (el, x, at) in glints)
+            {
+                if (at < 0) { x.T.X = glintRun * ModFx.InOut(Seg(t, .1, .42)); el.Opacity = ModFx.Life(t, .1, .14, .36, .42); continue; }
+                double g = Seg(t, at, at + .3);
+                x.Scale = ModFx.Bell(g); x.R.Angle = 80 * g; el.Opacity = g <= 0 || g >= 1 ? 0 : 1;
+            }
+            if (bx != null) { bx.T.X = (fb.Width + 110 + fb.Height * .4) * ModFx.InOut(Seg(t, .16, .72)); band!.Opacity = ModFx.Life(t, .16, .24, .62, .72); }
+            if (hx != null)
+            {
+                // a kill's hairline opens out from the middle; a wipe's closes in
+                hx.S.ScaleX = wipe ? 1 - Out(Seg(t, .2, .62)) : Out(Seg(t, .1, .32));
+                hair!.Opacity = wipe ? ModFx.Life(t, .08, .14, .45, .62) : ModFx.Life(t, .1, .14, .62, .8);
+            }
+        }, () => { _fightFx.Children.Clear(); _settle.X = 0; foreach (var r in rows) r.Opacity = 1; if (layer != null) FxDone("end", layer); });
     }
 }
