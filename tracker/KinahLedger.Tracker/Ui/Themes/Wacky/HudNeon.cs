@@ -528,7 +528,7 @@ sealed partial class HudNeon : WackyLook, IThemeCard
             for (int k = 0; k + 1 < keys.Length; k += 2) if (q >= keys[k]) o = keys[k + 1];
             _tube.Opacity = o;
             _tubeGlow.BorderThickness = new Thickness(3 + 4 * (1 - Seg(q, .5, 1)) * (o > .9 ? 1 : 0));
-            _tubeGlow.Opacity = .6 + .4 * (1 - Seg(q, .5, 1));
+            _tubeGlow.Opacity = q < .5 ? (o > .9 ? 1 : .25) : .6 + .4 * (1 - Seg(q, .5, 1));   // (a glow that strikes with each "on")
         }, () => { _tube.Opacity = 1; _tubeGlow.BorderThickness = new Thickness(3); _tubeGlow.Opacity = 1; });
     }
 
