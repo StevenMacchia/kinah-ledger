@@ -384,7 +384,15 @@ sealed partial class HudHype : ModernLook
         else if (!HasHour(f))
         {
             var w = Ht(Waiting(f.Abyss), 13.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 6, 7, 0, 6);
-            _lineBody.Children.Add(w);
+            // in the Abyss before the first points: what has happened so far under it ("2 kills / Kinah"), never an empty line
+            var so = f.Abyss ? Sub(f, false) : null;
+            if (so != null && so.Inlines.Count > 0)
+            {
+                var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(mark ? 0 : 6, 3, 0, 2) };
+                w.Margin = new Thickness(0); col.Children.Add(w); col.Children.Add(so);
+                _lineBody.Children.Add(col);
+            }
+            else _lineBody.Children.Add(w);
         }
         else
         {
@@ -904,32 +912,76 @@ sealed partial class HudHype : ModernLook
         if (_gaugeArt is not { } art) return;
         double was = _share is > 0 and < 1 ? _share : .86;
         bool beat = _beat;
+        // the hype: as the needle pins, the gauge slams bigger and back, confetti bursts off it, and a NEW BEST slab in lime
+        // smashes in beside the Buddy (a pickup's tag is black with a lime figure: this is the whole slab lit)
+        var gauge = art.Parent as Grid;
+        var gsc = new ScaleTransform(1, 1);
+        if (gauge != null) { gauge.RenderTransformOrigin = new Point(.5, .5); gauge.RenderTransform = gsc; }
+        var word = Lettering(L.T("New best").ToUpperInvariant(), 15.5, Punch, FontWeights.Normal, FontStretches.Normal);
+        var slab = Chip(word, Mod.Grad(false, (Color.FromRgb(0xA8, 0xE0, 0x00), 0), (LimeC, .3), (Color.FromRgb(0xE4, 0xFF, 0x7A), 1)), Black, new Thickness(10, 4, 12, 4), 8);
+        var tag = new Grid();
+        tag.Children.Add(new Border { Background = Mag, Margin = new Thickness(4, 4, -4, -4), RenderTransform = new SkewTransform(-14, 0) });
+        tag.Children.Add(slab);
+        var tsc = new ScaleTransform(1, 1);
+        var tshift = new TranslateTransform();
+        tag.RenderTransformOrigin = new Point(0, .5);
+        tag.RenderTransform = new TransformGroup { Children = { new SkewTransform(0, 0), tsc, tshift } };
+        var tskew = (SkewTransform)((TransformGroup)tag.RenderTransform).Children[0];
+        tag.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(tag, 4); Canvas.SetTop(tag, -tag.DesiredSize.Height / 2);
+        tag.Opacity = 0;
+        _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(tag);
+        if (gauge != null)
+        {
+            double gx = -(_line.ActualWidth > 0 ? _line.ActualWidth : 220) + 36;
+            EsportsFx.Spray(_lineAnchor, new Point(gx, 0), 5, 40, -38, 22, new[] { LimeC, MagC, Colors.White }, 1300, fall: 8, delay: .36);
+            EsportsFx.Spray(_lineAnchor, new Point(gx, 0), 5, 34, 158, 218, new[] { MagC, LimeC, Colors.White }, 1300, fall: 8, delay: .38);
+        }
         Motion.Play(art, 1800, t =>
         {
             _beat = false; _share = was;
             _complete = Out(Seg(t, 0, .4));
             if (t >= .4) { _beat = beat; _complete = 1; }
             _gaugeFlash = t < .4 ? 0 : 1 - Seg(t, .4, .9);
-            art.InvalidateVisual();
+            if (t <= .92) art.InvalidateVisual();
             Sheen(t is > .3 and < .8 ? Seg(t, .3, .8) : -1);
-        }, () => { _complete = 0; _beat = beat; _gaugeFlash = 0; Sheen(-1); art.InvalidateVisual(); });
+            gsc.ScaleX = gsc.ScaleY = t < .4 ? 1 - .05 * Seg(t, .25, .4) : EsportsFx.Punch(Seg(t, .4, .62), 1.28, 3);
+            double k = Seg(t, .4, .52), o = Seg(t, .84, 1);
+            tsc.ScaleX = k <= 0 ? 1.1 : EsportsFx.Punch(k, 1.1, 3); tsc.ScaleY = k <= 0 ? 1.7 : EsportsFx.Punch(k, 1.7, 3);
+            tskew.AngleX = -14 * (1 - Out(k));
+            tshift.X = -18 * (1 - Out(k)) - 12 * o;
+            tag.Opacity = t < .4 ? 0 : t < .84 ? Math.Min(1, k * 3) : 1 - o;
+        }, () => { _complete = 0; _beat = beat; _gaugeFlash = 0; Sheen(-1); art.InvalidateVisual(); gsc.ScaleX = gsc.ScaleY = 1; _lineAnchor.Children.Remove(tag); });
     }
 
-    /// <summary>An entry opened: the first timer's chip punches out lime and settles.</summary>
+    /// <summary>
+    /// An entry opened: the first timer's chip slams in like the leader's cut-in, from 1.7x and leaning hard, lands with one
+    /// white frame and a lime shockwave going out round it, and settles upright. Transforms and opacity only.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = LimeC, ShadowDepth = 0, BlurRadius = 9, Opacity = 0 };
         var sc = new ScaleTransform(1, 1);
+        var skew = new SkewTransform(0, 0);
         chip.RenderTransformOrigin = new Point(.5, .5);
-        chip.RenderTransform = sc;
-        chip.Effect = glow;
-        Motion.Play(chip, 1100, t =>
+        chip.RenderTransform = new TransformGroup { Children = { skew, sc } };
+        // the impact's white frame over the chip and its lime shockwave, made for this moment and gone after it
+        var flash = new Border { Background = White, Opacity = 0, IsHitTestVisible = false, RenderTransform = new SkewTransform(-14, 0), RenderTransformOrigin = new Point(.5, .5) };
+        var wave = new Border { BorderBrush = Lime, BorderThickness = new Thickness(2.2), Opacity = 0, IsHitTestVisible = false, Margin = new Thickness(-2), RenderTransformOrigin = new Point(.5, .5) };
+        var waveSc = new ScaleTransform(1, 1);
+        wave.RenderTransform = new TransformGroup { Children = { new SkewTransform(-14, 0), waveSc } };
+        chip.Children.Add(flash); chip.Children.Add(wave);
+        Motion.Play(chip, 900, t =>
         {
-            double k = t < .12 ? Seg(t, 0, .12) : 1 - Seg(t, .12, 1);
-            glow.Opacity = .95 * k;
-            sc.ScaleX = sc.ScaleY = t < .12 ? 1 + .14 * Seg(t, 0, .12) : 1 + .14 * (1 - Back(Seg(t, .12, .45), 2.5));
-        }, () => { chip.Effect = null; sc.ScaleX = sc.ScaleY = 1; });
+            double k = Seg(t, 0, .2);
+            sc.ScaleX = sc.ScaleY = k <= 0 ? 1.7 : EsportsFx.Punch(k, 1.7, 3);
+            skew.AngleX = -16 * (1 - Out(k));
+            chip.Opacity = Math.Min(1, .25 + k * 3);
+            flash.Opacity = t is >= .18 and < .3 ? .9 * (1 - Seg(t, .18, .3)) : 0;
+            double w = Seg(t, .18, .6);
+            waveSc.ScaleX = 1 + .35 * Out(w); waveSc.ScaleY = 1 + .9 * Out(w);
+            wave.Opacity = w is > 0 and < 1 ? 1 - w : 0;
+        }, () => { sc.ScaleX = sc.ScaleY = 1; skew.AngleX = 0; chip.Opacity = 1; chip.Children.Remove(flash); chip.Children.Remove(wave); });
     }
 
     /// <summary>A fight started: the meter snaps upright from a forward lean, the bolt badge slams onto the leader and the burst plays.</summary>
@@ -977,6 +1029,37 @@ sealed partial class HudHype : ModernLook
         _bandHost.Children.Clear(); _bandHost.Children.Add(ring); _bandHost.Children.Add(letters);
         var tab = _titleTab;
         var chip = _outcomeChip;
+        if (wipe)
+        {
+            // a wipe is the other way round: no slam and no burst. The word drags in heavy from the right and lands with a thud,
+            // its black copy tearing sideways (a broken feed), the whole meter shudders and the rows go dark for a beat
+            var tear = (TranslateTransform)copy.RenderTransform;
+            var fall = new TranslateTransform();
+            ((TransformGroup)letters.RenderTransform).Children.Add(fall);
+            Motion.Play(_bandHost, 1900, t =>
+            {
+                double k = Seg(t, 0, .16), o = Seg(t, .8, 1);
+                fall.X = 46 * (1 - Out(k)); fall.Y = t < .16 ? 0 : 3.5 * Math.Sin(Math.PI * Seg(t, .16, .26));
+                wsc.ScaleX = wsc.ScaleY = 1;
+                letters.Opacity = t < .8 ? Math.Min(1, k * 2.5) : 1 - o;
+                tear.X = 4 + (t is > .16 and < .5 ? 9 * Math.Sin(t * 140) * (1 - Seg(t, .16, .5)) : 0);
+                tear.Y = 3;
+                ring.Opacity = 0;
+                _fightShift.X = t < .16 ? 0 : EsportsFx.Shake(t, .16, .42, 5, 3);
+                _fightBody.Opacity = t < .16 ? 1 : .5 + .5 * Out(Seg(t, .2, .55));
+                double hide = t < .8 ? 1 - Seg(t, 0, .1) : o;
+                if (tab != null) tab.Opacity = hide;
+                if (chip != null) chip.Opacity = hide;
+            }, () => { _bandHost.Children.Clear(); _fightShift.X = 0; _fightBody.Opacity = 1; if (tab != null) tab.Opacity = 1; if (chip != null) chip.Opacity = 1; });
+            return;
+        }
+        // a kill: the slam, one white frame on the plate, the shockwave ring and a spray of lime, magenta and white confetti off the word
+        // the white frame in the plate's own cut shape (the plate as laid out; none before the first layout)
+        var whiteout = new System.Windows.Shapes.Path { Fill = Frozen(Mod.A(Colors.White, .5)), Opacity = 0, IsHitTestVisible = false };
+        if (_fight.ActualWidth > 12 && _fight.ActualHeight > 12) whiteout.Data = PlateGeo(new Rect(1, 1, _fight.ActualWidth - 4, _fight.ActualHeight - 5), Cut);
+        _fightFx.Children.Insert(0, whiteout);
+        // fired off the word's end along the head (never up past the window's top), drifting down over the plate as they fade
+        EsportsFx.Spray(_bandHost, new Point(16 + gw, 14), 12, 130, 6, 48, new[] { LimeC, MagC, Colors.White, LimeC }, 1500, fall: 34, delay: .1);
         Motion.Play(_bandHost, 1900, t =>
         {
             double k = Seg(t, 0, .14), o = Seg(t, .8, 1);
@@ -985,10 +1068,12 @@ sealed partial class HudHype : ModernLook
             double rg = Seg(t, .12, .5);
             rsc.ScaleX = rsc.ScaleY = .5 + .6 * Out(rg);
             ring.Opacity = rg is > 0 and < 1 ? 1 - rg : 0;
+            whiteout.Opacity = t is >= .12 and < .22 ? 1 - Seg(t, .12, .22) : 0;
+            _fightShift.Y = t < .13 ? 0 : Math.Abs(EsportsFx.Shake(t, .13, .3, 3.5, 1.5));
             double hide = t < .8 ? 1 - Seg(t, 0, .1) : o;
             if (tab != null) tab.Opacity = hide;
             if (chip != null) chip.Opacity = hide;
-        }, () => { _bandHost.Children.Clear(); if (tab != null) tab.Opacity = 1; if (chip != null) chip.Opacity = 1; });
-        if (!wipe) Burst(crown: false);
+        }, () => { _bandHost.Children.Clear(); _fightFx.Children.Remove(whiteout); _fightShift.Y = 0; if (tab != null) tab.Opacity = 1; if (chip != null) chip.Opacity = 1; });
+        Burst(crown: false);
     }
 }

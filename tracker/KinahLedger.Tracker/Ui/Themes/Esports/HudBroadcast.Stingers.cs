@@ -119,14 +119,15 @@ sealed partial class HudBroadcast
     {
         var s = FightSize();
         double span = s.Width + 2 * s.Height * Tan + 8;
-        double pa = t < .54 ? .5 * Out(Seg(t, 0, .16)) : .5 + .5 * In(Seg(t, .54, .78));
-        double pb = t < .5 ? .5 * Out(Seg(t, .03, .19)) : .5 + .5 * In(Seg(t, .5, .72));
+        // (2026-11-21: the plates cover the meter for under half a second, then the rows build in behind them)
+        double pa = t < .4 ? .5 * Out(Seg(t, 0, .12)) : .5 + .5 * In(Seg(t, .4, .56));
+        double pb = t < .37 ? .5 * Out(Seg(t, .02, .14)) : .5 + .5 * In(Seg(t, .37, .52));
         o.A.X = -span + 2 * span * pa;
         o.B.X = -span + 2 * span * pb;
-        o.St.X = -span + 2 * span * (t < .45 ? Seg(t, 0, .26) : Seg(t, .5, .8));
-        o.Brand.Opacity = t < .5 ? Seg(t, .09, .15) : 1 - Seg(t, .5, .55);
-        o.Punch.ScaleX = o.Punch.ScaleY = t < .09 ? 1.18 : 1 + .18 * (1 - Out(Seg(t, .09, .24)));
-        o.Drift.X = 14 - 28 * Seg(t, .09, .55);
+        o.St.X = -span + 2 * span * (t < .34 ? Seg(t, 0, .2) : Seg(t, .37, .6));
+        o.Brand.Opacity = t < .37 ? Seg(t, .07, .11) : 1 - Seg(t, .37, .41);
+        o.Punch.ScaleX = o.Punch.ScaleY = t < .07 ? 1.22 : EsportsFx.Punch(Seg(t, .07, .2), 1.22, 2.2);
+        o.Drift.X = 14 - 28 * Seg(t, .07, .41);
         o.Fx.Visibility = t >= 1 ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -304,18 +305,92 @@ sealed partial class HudBroadcast
             dc.Pop(); dc.Pop();
         }, front));
         var rows = RowsNow();
-        Motion.Play(fx, 1500, t =>
+        // (2026-11-21: the full takeover is a punch, not a hold: the plates slam over the meter, stay under half a second, and
+        // leave to the right; the result stays as a ticker over the head while the rows read again under it)
+        var ticker = ResultTicker(e, wipe, word, time, mvp);
+        Motion.Play(fx, 1700, t =>
         {
             var s = FightSize();
             double span = s.Width + 2 * s.Height * Tan + 8;
-            double pb = t < .72 ? .5 * Out(Seg(t, 0, .13)) : .5 + .5 * In(Seg(t, .72, .9));
-            double pf = t < .7 ? .5 * Out(Seg(t, .04, .17)) : .5 + .5 * In(Seg(t, .7, .86));
+            double pb = t < .25 ? .5 * Out(Seg(t, 0, .07)) : .5 + .5 * In(Seg(t, .25, .34));
+            double pf = t < .23 ? .5 * Out(Seg(t, .02, .09)) : .5 + .5 * In(Seg(t, .23, .32));
             back.X = -span + 2 * span * pb;
-            front.X = -span + 2 * span * pf;
-            st.X = -span + 2 * span * (t < .5 ? Seg(t, 0, .24) : Seg(t, .68, .94));
-            fx.Visibility = t >= 1 ? Visibility.Collapsed : Visibility.Visible;
-            foreach (var (r, i) in rows) r.SweepAt(Band(t, .86 + i * .02, .14), c);
-        }, () => { _fight.Children.Remove(fx); foreach (var (r, _) in rows) r.SweepAt(-1, c); });
+            // a wipe's front plate shudders as it lands (a broken feed); a kill's lands clean
+            front.X = -span + 2 * span * pf + (wipe ? EsportsFx.Shake(t, .08, .22, 7, 3.5) : 0);
+            st.X = wipe ? -4000 : -span + 2 * span * (t < .2 ? Seg(t, 0, .14) : Seg(t, .22, .4));
+            fx.Visibility = t >= .36 ? Visibility.Collapsed : Visibility.Visible;
+            foreach (var (r, i) in rows) r.SweepAt(Band(t, .3 + i * .04, .22), c, wipe ? .55 : .9);
+            ticker?.Invoke(t);
+        }, () => { _fight.Children.Remove(fx); foreach (var (r, _) in rows) r.SweepAt(-1, c); ticker?.Invoke(1); });
+    }
+
+    /// <summary>
+    /// The result left over the head once the stinger's plates have gone: the word on its colour's tile (VICTORY in mint,
+    /// DEFEAT in red), the MVP's player card on a kill (the boss's name on a wipe), the time on a cyan tile. It punches in as
+    /// the plates leave, holds, and wipes away; the head's own words come back under it. Its course is driven by the
+    /// stinger's (0 to 1, 1: gone).
+    /// </summary>
+    Action<double>? ResultTicker(Encounter e, bool wipe, string word, string time, MeterMember? mvp)
+    {
+        if (_head is not { } head) return null;
+        const double H = 24;
+        var c = wipe ? LiveC : MintC2;
+        var tagT = Bc(word, 15, wipe ? White : InkB);
+        var tag = new Slab(tagT, c, 1, null, H, padX: 7) { Rule = false, Shadow = 2.5 };
+        FrameworkElement mid;
+        Slab card;
+        if (!wipe && mvp != null)
+        {
+            var who = new StackPanel { Orientation = Orientation.Horizontal };
+            var mv = Bc(L.T("MVP"), 12.5, Frozen(Mod.Mix(MintC2, Colors.White, .4))); mv.Margin = new Thickness(0, 0, 6, 0); mv.VerticalAlignment = VerticalAlignment.Center;
+            who.Children.Add(mv);
+            var icon = ThemeText.Icon(mvp.Class, 17, mvp.Name);
+            icon.Margin = new Thickness(0, 0, 5, 0);
+            who.Children.Add(icon);
+            var nm = Bc(mvp.Name, 15.5, White); nm.TextTrimming = TextTrimming.CharacterEllipsis; nm.MaxWidth = 100;
+            who.Children.Add(nm);
+            mid = who;
+            var vc = Vivid(mvp.ClassColor);
+            card = new Slab(Shaded(who), Mod.Mix(vc, InkC, .3), 1, Colors.White, H, padX: 6, accentW: 3) { Shadow = 2.5, Margin = new Thickness(3 - H * Tan, 0, 0, 0) };
+            card.Paint = (dc, s, g, l) => dc.DrawGeometry(Mod.Grad(false, (Mod.A(vc, .95), 0), (Mod.A(vc, .5), .6), (Mod.A(InkC, .8), 1)), null, g);
+        }
+        else
+        {
+            var tt = Bc(e.Title, 14, Soft, FontWeights.SemiBold); tt.TextTrimming = TextTrimming.CharacterEllipsis; tt.MaxWidth = 150;
+            mid = tt;
+            card = new Slab(Shaded(tt), InkC, .96, null, H, padX: 6) { Shadow = 2.5, Margin = new Thickness(3 - H * Tan, 0, 0, 0) };
+        }
+        var fig = Bc(time, 16, InkB);
+        var score = new Slab(fig, CyanC, 1, null, H, padX: 6) { Rule = false, Shadow = 2.5, Margin = new Thickness(3 - H * Tan, 0, 0, 0) };
+        var row = new Grid { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left };
+        foreach (var _ in new[] { 0, 1, 2 }) row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(card, 1); Grid.SetColumn(score, 2);
+        row.Children.Add(tag); row.Children.Add(card); row.Children.Add(score);
+        var slide = new TranslateTransform();
+        card.RenderTransform = slide; score.RenderTransform = slide;
+        var punch = new ScaleTransform(1, 1, 0, H / 2);
+        tag.RenderTransform = punch;
+        double y = 0;
+        try { y = head.TranslatePoint(new Point(0, 0), _fight).Y + Math.Max(0, (head.ActualHeight - H) / 2); } catch (InvalidOperationException) { }
+        row.Margin = new Thickness(0, Math.Max(0, y), 0, 0);
+        _fight.Children.Add(row);
+        bool gone = false;
+        return t =>
+        {
+            if (gone) return;
+            if (t >= 1) { gone = true; _fight.Children.Remove(row); head.Opacity = 1; return; }
+            // the head's own words make way under it, and come back as it wipes off
+            head.Opacity = t < .9 ? 1 - Seg(t, .2, .26) : Seg(t, .93, 1);
+            tag.Wipe = t < .88 ? Out(Seg(t, .22, .3)) : 1 - Seg(t, .88, .95);
+            tagT.Opacity = t < .88 ? Seg(t, .26, .3) : 1 - Seg(t, .88, .92);
+            punch.ScaleX = punch.ScaleY = t < .26 ? 1.25 : EsportsFx.Punch(Seg(t, .26, .42), 1.25, 2.6);
+            tag.SweepAt(Band(t, .3, .2), Colors.White);
+            card.Wipe = score.Wipe = t < .86 ? Out(Seg(t, .26, .38)) : 1 - Seg(t, .86, .94);
+            slide.X = -40 * (1 - Out(Seg(t, .26, .42)));
+            double words = t < .86 ? Seg(t, .32, .4) : 1 - Seg(t, .86, .9);
+            mid.Opacity = words; fig.Opacity = words;
+            card.SweepAt(Band(t, .4, .24), c);
+        };
     }
 
     // ================================================================ a new leader
