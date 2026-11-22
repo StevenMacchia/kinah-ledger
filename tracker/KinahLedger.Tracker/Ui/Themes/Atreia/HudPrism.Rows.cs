@@ -270,6 +270,9 @@ sealed partial class HudPrism
         }
 
         /// <summary>Where the white light enters the crown's prism (its left face), in <paramref name="to"/>'s place.</summary>
+        /// <summary>Whether the row is laid out (a moment reads where its parts stand).</summary>
+        internal bool IsLaid => _root.ActualWidth > 0 && _root.IsVisible;
+
         internal Point PrismIn(Visual to) => _root.TranslatePoint(new Point(CrownX - CrownHalf * .5, CrownTop + CrownTall * .5), (UIElement)to);
 
         /// <summary>The bar's leading edge (its middle), in <paramref name="to"/>'s place, and the member's colour.</summary>

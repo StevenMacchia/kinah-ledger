@@ -308,7 +308,7 @@ sealed partial class HudRift
                 _flash!.Opacity = t < .24 ? 0 : Math.Sin(Math.PI * Seg(t, .24, .7));
                 double r = Seg(t, .26, .9);
                 _ringScale.ScaleX = _ringScale.ScaleY = .15 + 1.15 * Out(r);
-                _ring!.Opacity = t < .26 ? 0 : .95 * (1 - r);
+                _ring!.Opacity = 0;   // (the thin outline read as a stray shape: the flash and the flare carry the landing)
                 _edgesRun.ScaleX = Math.Max(.02, Out(Seg(t, .26, .6)));
                 _edges!.Opacity = t < .26 ? 0 : 1 - Seg(t, .6, 1);
                 _glow!.Opacity = t < .26 ? 0 : .9 * Math.Sin(Math.PI * Seg(t, .26, .95));
