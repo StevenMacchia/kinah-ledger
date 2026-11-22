@@ -87,7 +87,17 @@ sealed partial class HudManga
         readonly List<FrameworkElement> _marks = new();
         readonly double _dpsW, _shareW, _dmgW, _critW;
         // the bar: its body clipped to the member's part (the clip scales), its brush flick moved to the clip's edge, the glint in it
-        readonly Grid _barHost = new() { Height = BarH, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(-2, LineH + .5, 6, 0) };
+        readonly Grid _barHost = new() { Height = BarH, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(-2, LineH + .5, 12 - Pad, 0) };   // (its flick's 12 px past the fill reach the row's edge)
+        readonly Border _shade = new() { IsHitTestVisible = false };
+        static readonly Brush InkShade = Shade(InkC), PaperShade = Shade(PaperC);
+        /// <summary>The shade the stroke passes under the figures on: the row's ground at 55%, faded in over 14 px.</summary>
+        static Brush Shade(Color c)
+        {
+            var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(14, 0) };
+            b.GradientStops.Add(new GradientStop(Mod.A(c, 0), 0)); b.GradientStops.Add(new GradientStop(Mod.A(c, .55), 1));
+            b.Freeze();
+            return b;
+        }
         readonly Grid _barFill = new();
         readonly InkArt _barBody = new(), _barCap = new(), _glint;
         readonly ScaleTransform _clipScale = new(0, 1);
@@ -133,10 +143,15 @@ sealed partial class HudManga
             _barHost.Children.Add(_barCap);
             _barHost.SizeChanged += (_, _) => { BarArt(); ShowBar(); };
             _rank.HorizontalAlignment = HorizontalAlignment.Center; _rank.VerticalAlignment = VerticalAlignment.Top; _rank.Margin = new Thickness(0, 0, 0, 0); _rank.Height = LineH;
-            Grid.SetColumnSpan(_barHost, 3);
+            // the stroke runs the whole row (2026-11-21: it stopped at the name's column, a short streak once the damage and
+            // crit columns took their room): under the figures it passes on a soft shade of the row's ground, so the DPS's foot
+            // reads over it
+            Grid.SetColumnSpan(_barHost, 8);
+            _shade.VerticalAlignment = VerticalAlignment.Top; _shade.Height = BarH + 2; _shade.Margin = new Thickness(-1, LineH - .5, -Pad, 0);
+            Grid.SetColumnSpan(_shade, 5);
             _crown.RenderTransform = _crownScale;
             _crownHost.Children.Add(_crown);
-            Put(_barHost, 0); Put(_crownHost, 0); Put(_rank, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
+            Put(_barHost, 0); Put(_shade, 3); Put(_crownHost, 0); Put(_rank, 0); Put(_iconHost, 1); Put(_line, 2); Put(_heal, 3); Put(_dps, 4); Put(_share, 5); Put(_dmg, 6); Put(_crit, 7);
             _name.TextTrimming = TextTrimming.CharacterEllipsis;
             _cp.Margin = new Thickness(5, 3, 0, 0);
             _line.Children.Add(_name); _line.Children.Add(_cp);
@@ -168,6 +183,7 @@ sealed partial class HudManga
                 _cp.Foreground = _share.Foreground = _dmg.Foreground = _crit.Foreground = soft;
                 _rank.Foreground = White;
                 _crown.Visibility = lead ? Visibility.Visible : Visibility.Collapsed;
+                _shade.Background = lead ? PaperShade : InkShade;
                 _cls = m.Class;
                 var icon = ThemeText.Icon(m.Class, 18, m.Name);
                 if (icon is Border b) { b.BorderBrush = lead ? InkB : White; b.BorderThickness = new Thickness(1.4); }

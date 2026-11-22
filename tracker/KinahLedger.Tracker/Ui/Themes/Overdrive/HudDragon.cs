@@ -55,6 +55,9 @@ sealed partial class HudDragon : ModernLook
     double _share = -1, _complete;
     bool _beat;
     Border? _firstChip;
+    /// <summary>The hour's figure on the line (a best passed punches it).</summary>
+    TextBlock? _rate;
+    readonly TranslateTransform _fightShift = new();
 
     // the rare drop under the Buddy (on the hoard), and the notice line
     readonly Grid _rare = new() { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 3, 0, 0), Visibility = Visibility.Collapsed };
@@ -106,6 +109,7 @@ sealed partial class HudDragon : ModernLook
         _eye.Children.Add(_eyeFlare); _eye.Children.Add(_mouthGlow); _eye.Children.Add(_lid);
         _blaze = new TacSketch((dc, s) => { if (s.Width > 60 && s.Height > 40) dc.DrawDrawing(FightBlaze(Math.Floor(s.Width), Math.Floor(s.Height), _blazeC)); }) { Opacity = 0, ClipToBounds = true };
         _fight.Children.Add(_fightArt); _fight.Children.Add(_blaze); _fight.Children.Add(_fightUnder); _fight.Children.Add(_eye); _fight.Children.Add(_fightBody); _fight.Children.Add(_fightOver); _fight.Children.Add(_fightFx);
+        _fight.RenderTransform = _fightShift;   // a kill's jolt, a wipe's thud
 
         _runHeadLit = Lit(_runHead); _runHeadLit.Visibility = Visibility.Collapsed;
         _body.Children.Add(_fight); _body.Children.Add(Lit(_timersUp)); _body.Children.Add(_runHeadLit); _body.Children.Add(_line); _body.Children.Add(_rare); _body.Children.Add(Lit(_note));
@@ -169,7 +173,7 @@ sealed partial class HudDragon : ModernLook
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
-        _ringArt = null; _ringHost = null; _timerUp = false; _stripTimerW = -1;
+        _ringArt = null; _ringHost = null; _rate = null; _timerUp = false; _stripTimerW = -1;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
         _dim = Dimmed(Values);
         _line.Opacity = _dim ? .7 : 1;
@@ -183,7 +187,15 @@ sealed partial class HudDragon : ModernLook
         else if (!HasHour(f))
         {
             var w = Tt(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold); w.Margin = new Thickness(mark ? 0 : 34, 10, 4, 6);
-            _lineBody.Children.Add(w);
+            // the kills and the Kinah so far under it (Steven, 2026-11-21: information, not emptiness)
+            var stats = Sub(f, false);
+            if (stats.Inlines.Count > 0)
+            {
+                w.Margin = new Thickness(mark ? 0 : 34, 3, 4, 0);
+                stats.Margin = new Thickness(mark ? 1 : 35, 1, 4, 2);
+                _lineBody.Children.Add(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { w, stats } });
+            }
+            else _lineBody.Children.Add(w);
         }
         else
         {
@@ -205,6 +217,7 @@ sealed partial class HudDragon : ModernLook
             var top = new StackPanel { Orientation = Orientation.Horizontal };
             var rate = Tt(f.Rate, f.Warm ? 15 : 22, f.Warm ? Soft : White, f.Warm ? FontWeights.SemiBold : FontWeights.Bold);
             rate.Tag = "buddy-rate";
+            if (!f.Warm) _rate = rate;
             top.Children.Add(rate);
             if (f.Unit.Length > 0) { var u = Tt(f.Unit, 11, BronzeInk, FontWeights.SemiBold); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(2, 0, 0, 4); top.Children.Add(u); }
             words.Children.Add(top);
@@ -625,9 +638,36 @@ sealed partial class HudDragon : ModernLook
         var glint2 = new Rectangle { Width = 24, Height = 24, Fill = Glint, Opacity = 0, RenderTransformOrigin = new Point(.5, .5), RenderTransform = new ScaleTransform(0, 0) };
         Canvas.SetLeft(glint2, 8 + 26 - 8); Canvas.SetTop(glint2, 6 + 26 - 14);
         top.Children.Add(glint); top.Children.Add(glint2);
-        var race = Race(fx, 60, DragonGoldC);
+        // the big one in its grade's colour (2026-11-21: it read like a pickup): the light that runs the hoard, a shockwave
+        // rolling off the tile and embers flung out of it are all the grade's
+        var gc = _rareC;
+        // the hoard flares in the grade's colour as the tile lands (a frozen fill, its opacity only)
+        var flood = new Rectangle { Width = _rare.ActualWidth > 0 ? _rare.ActualWidth : 260, Height = _rare.ActualHeight > 0 ? _rare.ActualHeight : 46, Opacity = 0, IsHitTestVisible = false,
+            Fill = Mod.Grad(false, (Mod.A(Mod.Mix(gc, Colors.White, .4), .85), 0), (Mod.A(gc, .55), .45), (Mod.A(gc, 0), 1)) };
+        fx.Children.Add(flood);
+        var race = Race(fx, 60, Mod.Mix(gc, Colors.White, .25));
+        var waves = new List<(Ellipse E, ScaleTransform S, double At)>();
+        var motes = new List<(Ellipse E, TranslateTransform T, Vector V, double At)>();
+        if (MidOn(tile, fx) is { } mid)
+        {
+            var shock = Shock(Mod.Mix(gc, Colors.White, .2));
+            for (int k = 0; k < 2; k++) { var (e, s) = Wave(fx, mid, 64, shock); waves.Add((e, s, .06 + .12 * k)); }
+            var hot = Glow(Mod.Mix(gc, Colors.White, .5), 1); var deep = Glow(gc, 1);
+            var rnd = new Random(13);
+            for (int k = 0; k < 8; k++)
+            {
+                double ang = -Math.PI * .6 + Math.PI * 1.2 * k / 7 + .15 * rnd.NextDouble(), dist = 40 + 60 * rnd.NextDouble(), sz = 6 + 5 * rnd.NextDouble();
+                var el = new Ellipse { Width = sz, Height = sz, Fill = k % 2 == 0 ? hot : deep, Opacity = 0, RenderTransform = new TranslateTransform(), IsHitTestVisible = false };
+                Canvas.SetLeft(el, mid.X - sz / 2); Canvas.SetTop(el, mid.Y - sz / 2);
+                fx.Children.Add(el);
+                motes.Add((el, (TranslateTransform)el.RenderTransform, new Vector(Math.Cos(ang), Math.Sin(ang) * .5) * dist, .08 + .06 * rnd.NextDouble()));
+            }
+        }
         Motion.Play(_rare, 1500, t =>
         {
+            foreach (var (e, s, at) in waves) { double u = Seg(t, at, at + .45); s.ScaleX = s.ScaleY = .1 + 5.5 * Out(u); e.Opacity = u <= 0 || u >= 1 ? 0 : (1 - u); }
+            flood.Opacity = t < .06 ? Seg(t, 0, .06) : 1 - Seg(t, .06, .45);
+            foreach (var (e, tr, v, at) in motes) { double u = Seg(t, at, at + .4); var q = Out(u); tr.X = v.X * q; tr.Y = v.Y * q; e.Opacity = u <= 0 || u >= 1 ? 0 : Math.Min(1, 4 * u) * (1 - u); }
             double a = Seg(t, .05, .55), k = Math.Sin(Math.PI * a);
             gs.ScaleX = gs.ScaleY = 1.25 * k; gr.Angle = 90 * a; glint.Opacity = Math.Min(1, 1.5 * k);
             double b = Seg(t, .25, .7), k2 = Math.Sin(Math.PI * b);
@@ -653,8 +693,32 @@ sealed partial class HudDragon : ModernLook
         var halo = new Ellipse { Width = 2 * r + 12, Height = 2 * r + 12, Margin = new Thickness(c - r - 6), Stroke = Frozen(Mod.A(Color.FromRgb(0xFF, 0xD8, 0x6A), .95)), StrokeThickness = 4.5, Opacity = 0, RenderTransform = pop, IsHitTestVisible = false };
         host.Children.Add(burst); host.Children.Add(halo); host.Children.Add(orbit);
         var race = Race(_lineFx, _line.ActualHeight > 0 ? _line.ActualHeight : 56, DragonGoldC);
+        // the hoard ignites (2026-11-21, "best-passed weak in Dragon"): as the flame closes the circle two gold shockwaves roll
+        // off the ring across the coil plate, embers spit out of it, and the hour takes the hit
+        var waves = new List<(Ellipse E, ScaleTransform S, double At)>();
+        var motes = new List<(Ellipse E, TranslateTransform T, Vector V, double At)>();
+        if (MidOn(host, _lineFx) is { } mid)
+        {
+            for (int k = 0; k < 2; k++) { var (e, s) = Wave(_lineFx, mid, 56, k == 0 ? ShockHot : ShockGold); waves.Add((e, s, .28 + .1 * k)); }
+            var rnd = new Random(11);
+            for (int k = 0; k < 8; k++)
+            {
+                double ang = -Math.PI * .95 + Math.PI * 1.3 * k / 7 + .2 * rnd.NextDouble(), dist = 34 + 40 * rnd.NextDouble(), sz = 4 + 4 * rnd.NextDouble();
+                var el = new Ellipse { Width = sz, Height = sz, Fill = k % 2 == 0 ? MoteHot : MoteEmber, Opacity = 0, RenderTransform = new TranslateTransform(), IsHitTestVisible = false };
+                Canvas.SetLeft(el, mid.X - sz / 2); Canvas.SetTop(el, mid.Y - sz / 2);
+                _lineFx.Children.Add(el);
+                motes.Add((el, (TranslateTransform)el.RenderTransform, new Vector(Math.Cos(ang), Math.Sin(ang) * .7) * dist, .3 + .05 * rnd.NextDouble()));
+            }
+        }
+        // (the hour with its unit: the hour alone would grow into its "/h")
+        var rate = _rate?.Parent as FrameworkElement;
+        var rsc = new ScaleTransform(1, 1);
+        if (rate != null) { rate.RenderTransformOrigin = new Point(0, .7); rate.RenderTransform = rsc; }
         Motion.Play(art, 1800, t =>
         {
+            foreach (var (e, s, at) in waves) { double u = Seg(t, at, at + .4); s.ScaleX = s.ScaleY = .1 + 4.2 * Out(u); e.Opacity = u <= 0 || u >= 1 ? 0 : (1 - u); }
+            foreach (var (e, tr, v, at) in motes) { double u = Seg(t, at, at + .38); var q = Out(u); tr.X = v.X * q; tr.Y = v.Y * q + 10 * u * u; e.Opacity = u <= 0 || u >= 1 ? 0 : Math.Min(1, 4 * u) * (1 - u); }
+            rsc.ScaleX = rsc.ScaleY = 1 + .1 * Ez.Wob(Seg(t, .28, .7), 1.5, 4);
             _beat = false; _share = was;
             double run = Out(Seg(t, 0, .3));
             _complete = run;
@@ -667,18 +731,73 @@ sealed partial class HudDragon : ModernLook
             burst.Opacity = t < .1 ? Seg(t, 0, .1) : 1 - b * b;
             halo.Opacity = t < .1 ? Seg(t, 0, .1) : 1 - b * b * b;
             RaceAt(race, _line.ActualWidth, Seg(t, .15, .7));
-        }, () => { host.Children.Remove(burst); host.Children.Remove(halo); host.Children.Remove(orbit); _lineFx.Children.Remove(race); _complete = 0; _beat = beat; art.InvalidateVisual(); });
+        }, () =>
+        {
+            host.Children.Remove(burst); host.Children.Remove(halo); host.Children.Remove(orbit); _lineFx.Children.Remove(race); _complete = 0; _beat = beat; art.InvalidateVisual();
+            foreach (var (e, _, _) in waves) _lineFx.Children.Remove(e);
+            foreach (var (e, _, _, _) in motes) _lineFx.Children.Remove(e);
+            if (rate != null) rate.RenderTransform = null;
+        });
     }
 
-    /// <summary>An entry opened: the first timer's chip lights emerald round its edge and settles.</summary>
+    /// <summary>The middle of <paramref name="el"/> on <paramref name="host"/>, or null when it is not laid out inside it.</summary>
+    static Point? MidOn(FrameworkElement? el, FrameworkElement host)
+    {
+        try
+        {
+            if (el == null || el.ActualWidth <= 0 || !el.IsVisible || !host.IsVisible) return null;
+            return el.TranslatePoint(new Point(el.ActualWidth / 2, el.ActualHeight / 2), host);
+        }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    /// <summary>A soft shockwave of <paramref name="fill"/> centred on <paramref name="at"/> on <paramref name="host"/>: its scale and opacity are the moment's.</summary>
+    static (Ellipse E, ScaleTransform S) Wave(Canvas host, Point at, double d, Brush fill)
+    {
+        var s = new ScaleTransform(.1, .1, d / 2, d / 2);
+        var e = new Ellipse { Width = d, Height = d, Fill = fill, Opacity = 0, RenderTransform = s, IsHitTestVisible = false };
+        Canvas.SetLeft(e, at.X - d / 2); Canvas.SetTop(e, at.Y - d / 2);
+        host.Children.Add(e);
+        return (e, s);
+    }
+
+    // (made on first use: the colours are other parts' statics)
+    static RadialGradientBrush? _shockEmerald;
+    static RadialGradientBrush ShockEmerald => _shockEmerald ??= Shock(EmeraldC);
+
+    /// <summary>
+    /// An entry opened, the gate's seal breaking: the first timer's chip draws in (a breath held), bursts out past its size
+    /// with an emerald shockwave rolling off it across the coil plate, an emerald light runs the plate, and the chip
+    /// settles with its edge lit.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = EmeraldC, ShadowDepth = 0, BlurRadius = 10, Opacity = 0 };
-        chip.Effect = glow;
         var edge = chip.BorderBrush;
         chip.BorderBrush = Frozen(Mod.Mix(EmeraldC, Colors.White, .3));
-        Motion.Play(chip, 1200, t => glow.Opacity = .9 * (t < .25 ? Seg(t, 0, .25) : 1 - Seg(t, .25, 1)), () => { chip.Effect = null; chip.BorderBrush = edge; });
+        var sc = new ScaleTransform(1, 1);
+        chip.RenderTransformOrigin = new Point(.5, .5); chip.RenderTransform = sc;
+        // the waves and the light on the coil plate (clipped to it); none when the chip sits in the fight
+        var waves = new List<(Ellipse E, ScaleTransform S, double At)>();
+        Rectangle? race = null;
+        if (MidOn(chip, _lineFx) is { } mid)
+        {
+            for (int k = 0; k < 2; k++) { var (e, s) = Wave(_lineFx, mid, 60, k == 0 ? ShockEmerald : ShockGold); waves.Add((e, s, .2 + .12 * k)); }
+            race = Race(_lineFx, _line.ActualHeight > 0 ? _line.ActualHeight : 56, EmeraldC);
+        }
+        Motion.Play(chip, 1200, t =>
+        {
+            double wind = Seg(t, 0, .14), pop = Ez.Wob(Seg(t, .14, .6), 1.5, 4), rise = Out(Seg(t, .14, .2));
+            sc.ScaleX = sc.ScaleY = t < .14 ? 1 - .12 * Ez.InOut(wind) : .88 + .12 * rise + .22 * pop;
+            chip.Opacity = t < .14 ? 1 - .4 * wind : .6 + .4 * Seg(t, .14, .2);
+            foreach (var (e, s, at) in waves) { double u = Seg(t, at, at + .45); s.ScaleX = s.ScaleY = .1 + 3.4 * Out(u); e.Opacity = u <= 0 || u >= 1 ? 0 : .95 * (1 - u); }
+            if (race != null) RaceAt(race, _line.ActualWidth, Seg(t, .16, .7));
+        }, () =>
+        {
+            chip.RenderTransform = null; chip.Opacity = 1; chip.BorderBrush = edge;
+            foreach (var (e, _, _) in waves) _lineFx.Children.Remove(e);
+            if (race != null) _lineFx.Children.Remove(race);
+        });
     }
 
     /// <summary>
@@ -735,7 +854,7 @@ sealed partial class HudDragon : ModernLook
         // the embers (ash on a wipe): small motes thrown out of the jaws
         var motes = new List<(Ellipse E, TranslateTransform T, Vector V, double At)>();
         var rnd = new Random(7);
-        for (int k = 0; k < 20; k++)
+        for (int k = 0; k < 12; k++)   // (12: a few short-lived pieces, 2026-11-21)
         {
             double ang = wipe ? Math.PI * (.35 + .3 * rnd.NextDouble()) : -Math.PI * .45 + Math.PI * .95 * rnd.NextDouble();
             double dist = (wipe ? 50 : 90) + (wipe ? 60 : 150) * rnd.NextDouble();
@@ -761,8 +880,8 @@ sealed partial class HudDragon : ModernLook
         var ck = Tt("  " + Clock(e.Duration(e.End ?? DateTime.UtcNow)), 16, White, FontWeights.SemiBold); ck.Margin = new Thickness(4, 4, 0, 0);
         words.Children.Add(ck);
         plate.Children.Add(Lit(words));
-        var slam = new ScaleTransform(1, 1);
-        plate.RenderTransformOrigin = new Point(.3, .5); plate.RenderTransform = slam;
+        var slam = new ScaleTransform(1, 1); var fall = new TranslateTransform(); var tip = new RotateTransform(0);
+        plate.RenderTransformOrigin = new Point(.3, .5); plate.RenderTransform = new TransformGroup { Children = { slam, tip, fall } };
         _fightFx.Children.Clear(); _fightFx.Children.Add(plate);
         bool Seat()
         {
@@ -786,17 +905,31 @@ sealed partial class HudDragon : ModernLook
             _eyeFlare.Opacity = wipe ? 0 : t < .1 ? Seg(t, 0, .1) : 1 - Seg(t, .3, .7);
             _mouthGlow.Opacity = wipe ? 0 : t < .08 ? Seg(t, 0, .08) : 1 - Seg(t, .25, .55);
             _lidScale.ScaleY = wipe ? .78 * (t < .2 ? Out(Seg(t, 0, .2)) : 1 - Seg(t, .85, 1)) : 0;
+            // a wipe: the rows sag to half light under the falling ash and come back as the plate leaves (a kill stays bright)
+            if (wipe) _fightBody.Opacity = t < .1 ? 1 : t < .6 ? 1 - .45 * Out(Seg(t, .1, .2)) : .55 + .45 * Seg(t, .6, .8);
             for (int i = 0; i < rows.Count; i++) rows[i].Blaze(Seg(t, .05 + .05 * i, .45 + .05 * i));
-            double i0 = Seg(t, .06, .16);
-            plate.Opacity = t < .84 ? Math.Min(1, i0 * 1.6) : 1 - Seg(t, .84, 1);
-            slam.ScaleX = slam.ScaleY = 1 + .22 * (1 - Out(i0));
-            if (head != null) head.Opacity = t < .84 ? 1 - Seg(t, .06, .14) : Seg(t, .84, 1);
+            // the plate takes the head's place: the head gone before the plate comes, back only once the plate has left
+            // (their words never cross); a kill slams it from big, a wipe drops it from above with a dead thud, tipped
+            double i0 = Seg(t, .07, .16);
+            plate.Opacity = t < .07 ? 0 : t < .82 ? Math.Min(1, i0 * 1.6) : 1 - Seg(t, .82, .91);
+            if (wipe)
+            {
+                fall.Y = -8 * (1 - i0 * i0);   // (8: the plate sits by the window's top) tip.Angle = -2.5 * Out(Seg(t, .16, .4));
+                _fightShift.Y = Math.Abs(Ez.Jolt(Seg(t, .16, .36), 2.5, 4));   // (2.5: the panel sits on the window's foot)
+            }
+            else
+            {
+                slam.ScaleX = slam.ScaleY = 1.22 - .22 * Back(i0, 2.4);
+                _fightShift.X = Ez.Jolt(Seg(t, .14, .34), 4, 5);
+            }
+            if (head != null) head.Opacity = t < .5 ? 1 - Seg(t, .03, .07) : Seg(t, .91, 1);
         }, () =>
         {
             _fightFx.Children.Clear(); _fightUnder.Children.Clear(); _fightOver.Children.Clear();
             _eyeFlare.Opacity = 0; _mouthGlow.Opacity = 0; _lidScale.ScaleY = 0; _blaze.Opacity = 0;
             foreach (var r in rows) r.Blaze(-1);
             if (head != null) head.Opacity = 1;
+            _fightShift.X = _fightShift.Y = 0; _fightBody.Opacity = 1;
         });
     }
 }

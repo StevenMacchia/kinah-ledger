@@ -150,6 +150,40 @@ abstract class WackyLook : HudThemeLook
         return new Sprite(el).Set(1, 1, 0, 0, 0, 0);
     }
 
+    /// <summary>
+    /// A rare drop's shards (2026-11-21 review: the rare drop's pop read like a pickup's): <paramref name="n"/> little stars
+    /// in <paramref name="rgb"/> (the grade's colour) thrown out of <paramref name="at"/> after <paramref name="delay"/> of the
+    /// course, spinning, falling a little and gone; pre-built shapes moved by their transforms, kept inside the window.
+    /// </summary>
+    protected void Shards(Point at, uint rgb, int n, double reach, double ms, double delay, string slot)
+    {
+        var win = WinSize;
+        // (wide and flat: the window's room is mostly to the sides)
+        double rx = Math.Max(24, Math.Min(reach, Math.Min(at.X, win.Width - at.X) - 10)), ry = Math.Max(10, Math.Min(reach * .6, Math.Min(at.Y, win.Height - at.Y) - 10));
+        var bits = new Wk.Bits(2 * rx + 20, 2 * ry + 20);
+        var rnd = new Random(53);
+        var fills = new[] { Wk.S(rgb), Wk.S(Wk.Shade(rgb, .5)), Wk.S(0xFFFFFF) };
+        var dirs = new List<(double A, double R, double Spin)>();
+        for (int i = 0; i < n; i++)
+        {
+            double sz = 7 + 5 * rnd.NextDouble();
+            bits.Add(new System.Windows.Shapes.Path { Data = Wk.Star(sz / 2, sz / 2, 4, .42, 60 + i), Fill = fills[i % 3], Stroke = Wk.S(0x111111, .8), StrokeThickness = 1 });
+            dirs.Add((-Math.PI * (.02 + .96 * i / Math.Max(1, n - 1)) + .12 * (rnd.NextDouble() - .5), .7 + .3 * rnd.NextDouble(), (rnd.NextDouble() - .5) * 400));   // (up and out to the sides: never down over the line's words)
+        }
+        var s = Spawn(bits.Host, at, slot);
+        s.Set(1, 1, 0, 0, 0, 1);
+        Play(s, slot, ms, q =>
+        {
+            double u = Seg(q, delay, 1);
+            for (int i = 0; i < n; i++)
+            {
+                var (a, r, spin) = dirs[i];
+                double k = 1 - Math.Pow(1 - u, 3);
+                bits.Set(i, Math.Cos(a) * rx * r * k, Math.Sin(a) * ry * r * k + 4 * u * u, spin * u, .4 + .8 * Math.Sin(Math.PI * Math.Min(1, u * 1.4)), u <= 0 ? 0 : 1 - Seg(u, .55, 1));
+            }
+        });
+    }
+
     /// <summary>Plays a sprite's course once (held: at the render's point), and takes it away at its end.</summary>
     protected void Play(Sprite s, string slot, double ms, Action<double> step) =>
         Motion.Play(s.El, ms, step, () => { _fx.Children.Remove(s.El); if (_slots.TryGetValue(slot, out var cur) && ReferenceEquals(cur, s.El)) _slots.Remove(slot); });

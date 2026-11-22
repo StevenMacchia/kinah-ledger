@@ -99,9 +99,13 @@ sealed partial class HudVersus : ModernLook
 
     // ================================================================ the Buddy
 
+    /// <summary>The hour with its unit on the line (a best passed punches it).</summary>
+    FrameworkElement? _hourTop;
+
     protected override void DrawLine(Figures f)
     {
         _lineBody.Children.Clear();
+        _hourTop = null;
         _timerUp = false; _stripTimerW = -1;
         _super.Children.Clear(); _super.Visibility = Visibility.Collapsed; _superArt = null;
         if (_timersInLine.Child != null) _timersInLine.Child = null;
@@ -116,7 +120,16 @@ sealed partial class HudVersus : ModernLook
         else if (!HasHour(f))
         {
             var w = T(Waiting(f.Abyss), 12.5, Soft, FontWeights.SemiBold, italic: true); w.Margin = new Thickness(0, 6, 0, 6);
-            _lineBody.Children.Add(w);
+            // the kills and the Kinah so far under it (Steven, 2026-11-21: information, not emptiness)
+            var stats = Sub(f, false);
+            if (stats.Inlines.Count > 0)
+            {
+                w.Margin = new Thickness(0, 2, 0, 0);
+                var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 2) };
+                sp.Children.Add(w); sp.Children.Add(stats);
+                _lineBody.Children.Add(sp);
+            }
+            else _lineBody.Children.Add(w);
         }
         else
         {
@@ -140,6 +153,7 @@ sealed partial class HudVersus : ModernLook
             if (!f.Warm) rate.Margin = new Thickness(0, -3, 0, -3);
             rate.Tag = "buddy-rate";
             top.Children.Add(rate);
+            _hourTop = f.Warm ? null : top;
             if (f.Unit.Length > 0) { var u = T(f.Unit, 11, Yellow, FontWeights.Bold, italic: true); u.VerticalAlignment = VerticalAlignment.Bottom; u.Margin = new Thickness(3, 0, 0, 3); top.Children.Add(u); }
             words.Children.Add(top);
             // farming, the pickups as the strip beside the hour where it fits (the best drop and the last three), the session
@@ -571,11 +585,15 @@ sealed partial class HudVersus : ModernLook
         var sc = new ScaleTransform(1, 1);
         if (tile != null) { tile.RenderTransformOrigin = new Point(.5, .5); tile.RenderTransform = sc; }
         string word = L.T("SPECIAL!");
-        var spark = Spark(20, YellowC, 11); spark.HorizontalAlignment = HorizontalAlignment.Left; spark.Margin = new Thickness(2, 0, 0, 0);
+        // in the grade's colour, the big one (2026-11-21 review: a yellow SPECIAL! read as any pickup), the plate jolted
+        var gc = Rare(Values) is { } rp ? ColorOf(rp.Color, rp.Grade) : YellowC;
+        var gradeFill = Mod.Grad(true, (Mod.Mix(gc, Colors.White, .75), 0), (Mod.Mix(gc, Colors.White, .3), .4), (gc, .7), (Mod.Mix(gc, Colors.Black, .35), 1));
+        var jolt = new TranslateTransform(); _rare.RenderTransform = jolt;
+        var spark = Spark(20, Mod.Mix(gc, Colors.White, .45), 11); spark.HorizontalAlignment = HorizontalAlignment.Left; spark.Margin = new Thickness(2, 0, 0, 0);
         var spSc = new ScaleTransform(1, 1); spark.RenderTransform = spSc;
         var flash = new System.Windows.Shapes.Rectangle { Fill = White, Opacity = 0 };
         fx.Children.Clear(); fx.Children.Add(flash); fx.Children.Add(spark);
-        var slam = Slam(word, SlamSize(word, 22, 92, 34), SlamFill, stroke: 4);
+        var slam = Slam(word, SlamSize(word, 22, 92, 34), gradeFill, stroke: 4);
         var ss = new ScaleTransform(1, 1); slam.RenderTransform = ss;
         var burst = Spark(Math.Min(17, slam.Height * .6), RedC, 10);
         var bs = new ScaleTransform(1, 1); burst.RenderTransform = bs;
@@ -594,7 +612,8 @@ sealed partial class HudVersus : ModernLook
             double u = Seg(t, .3, .7);
             burst.Opacity = t < .3 ? 0 : .9 * (1 - u); bs.ScaleX = bs.ScaleY = .5 + .6 * Out(u);
             flash.Opacity = .45 * Flash(t, .3, .1);
-        }, () => { _rareBloom = 1; plate.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; fx.Children.Clear(); anchor.Children.Clear(); });
+            jolt.X = Ez.Jolt(Seg(t, .3, .5), 3.5, 5);
+        }, () => { _rare.RenderTransform = null; _rareBloom = 1; plate.InvalidateVisual(); sc.ScaleX = sc.ScaleY = 1; fx.Children.Clear(); anchor.Children.Clear(); });
     }
 
     /// <summary>
@@ -637,8 +656,15 @@ sealed partial class HudVersus : ModernLook
         var lineAt = new TranslateTransform(); lines.RenderTransform = lineAt;
         Canvas.SetLeft(lines, -18); Canvas.SetTop(lines, -ph / 2);
         _lineAnchor.Children.Clear(); _lineAnchor.Children.Add(lines); _lineAnchor.Children.Add(slab);
+        // the score takes the hit as the meter completes: crouched a beat, punched past its size, the plate jolted
+        var hour = _hourTop;
+        var hsc = new ScaleTransform(1, 1);
+        if (hour != null) { hour.RenderTransformOrigin = new Point(0, .6); hour.RenderTransform = hsc; }
+        var jolt = new TranslateTransform(); _line.RenderTransform = jolt;
         Motion.Play(art, 1600, t =>
         {
+            hsc.ScaleX = hsc.ScaleY = t < .3 ? 1 - .06 * Ez.InOut(Seg(t, .24, .3)) : .94 + .06 * Out(Seg(t, .3, .34)) + .12 * Ez.Wob(Seg(t, .3, .7), 1.5, 4);
+            jolt.X = Ez.Jolt(Seg(t, .3, .48), 2.5, 5);
             _beat = false; _share = was;
             _complete = Out(Seg(t, 0, .3));
             if (t >= .3) { _beat = beat; _complete = 1; }
@@ -652,22 +678,46 @@ sealed partial class HudVersus : ModernLook
             slab.Opacity = t < .32 ? 0 : t < .82 ? Seg(t, .32, .37) : 1 - Seg(t, .82, .97);
             ss.ScaleX = ss.ScaleY = SlamScale(Seg(t, .36, .5), 1.5);
             lines.Opacity = t < .34 ? 0 : .9 * (1 - Seg(t, .36, .7)); lineAt.X = -10 * Seg(t, .34, .7);
-        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); _lineFx.Children.Clear(); _lineAnchor.Children.Clear(); });
+        }, () => { _complete = 0; _beat = beat; art.InvalidateVisual(); _lineFx.Children.Clear(); _lineAnchor.Children.Clear(); if (hour != null) hour.RenderTransform = null; _line.RenderTransform = null; });
     }
 
-    /// <summary>An entry opened: the first timer's chip flashes white and glows mint, then settles.</summary>
+    /// <summary>
+    /// An entry opened, a challenger's entrance: the first timer's chip winds up (crouched, dimmed), punches out to past its
+    /// size on speed streaks, lands with a white flash frame, a jolt and a mint hit spark at its leading edge, a mint shockwave
+    /// of its outline spreads off it, and it settles where it rests.
+    /// </summary>
     protected override void EntryOpened(TimerBoard.Item i, bool held)
     {
         if (_firstChip is not { } chip) return;
-        var glow = new DropShadowEffect { Color = MintC, ShadowDepth = 0, BlurRadius = 12, Opacity = 0 };
-        chip.Effect = glow;
-        var flash = new TacSketch((dc, s) => dc.DrawGeometry(Frozen(Mod.A(Colors.White, .85)), null, Slab(new Rect(1.5, 1.5, s.Width - 3, s.Height - 3)))) { Opacity = 0 };
-        chip.Children.Insert(1, flash);
-        Motion.Play(chip, 1200, t =>
+        var flash = new TacSketch((dc, s) => dc.DrawGeometry(Frozen(Mod.A(Colors.White, .9)), null, Slab(new Rect(1.5, 1.5, s.Width - 3, s.Height - 3)))) { Opacity = 0 };
+        var wave = new TacSketch((dc, s) => dc.DrawGeometry(null, Mod.P(Frozen(MintC), 3), Slab(new Rect(1.5, 1.5, s.Width - 3, s.Height - 3))))
+            { Opacity = 0, RenderTransformOrigin = new Point(.5, .5) };
+        var waveSc = new ScaleTransform(1, 1); wave.RenderTransform = waveSc;
+        var spark = Spark(19, MintC, 11); spark.HorizontalAlignment = HorizontalAlignment.Left; spark.Margin = new Thickness(-20, -14, 0, -14);
+        var spSc = new ScaleTransform(1, 1); var spRot = new RotateTransform(0); spark.RenderTransform = new TransformGroup { Children = { spSc, spRot } };
+        var lines = Streaks(MintC, 5, 21); lines.HorizontalAlignment = HorizontalAlignment.Right; lines.Width = 34; lines.Margin = new Thickness(0, 0, -36, 0);
+        var linesAt = new TranslateTransform(); lines.RenderTransform = linesAt;
+        chip.Children.Insert(0, lines);
+        chip.Children.Add(flash); chip.Children.Add(wave); chip.Children.Add(spark);
+        var sc = new ScaleTransform(1, 1); var at = new TranslateTransform();
+        chip.RenderTransformOrigin = new Point(.5, .5);
+        chip.RenderTransform = new TransformGroup { Children = { sc, at } };
+        Motion.Play(chip, 1100, t =>
         {
-            glow.Opacity = .95 * (t < .2 ? Seg(t, 0, .2) : 1 - Seg(t, .2, 1));
-            flash.Opacity = .7 * Flash(t, .05, .25);
-        }, () => { chip.Effect = null; chip.Children.Remove(flash); });
+            // wind-up (yanked back right, faded), the punch in (an overshoot past its place), the hit, the settle
+            // (in place: a chip that travels runs into its neighbours' words)
+            double wind = Seg(t, 0, .1), pop = Ez.Wob(Seg(t, .1, .6), 1.5, 4), rise = Motion.Out(Seg(t, .1, .16));
+            sc.ScaleX = t < .1 ? 1 - .14 * Ez.InOut(wind) : .86 + .14 * rise + .24 * pop;
+            sc.ScaleY = t < .1 ? 1 - .2 * Ez.InOut(wind) : .8 + .2 * rise + .34 * pop;
+            at.X = Ez.Jolt(Seg(t, .25, .45), 2.5, 4);
+            chip.Opacity = t < .1 ? 1 - .6 * wind : .4 + .6 * Seg(t, .1, .16);
+            lines.Opacity = t < .1 ? 0 : .95 * (1 - Seg(t, .2, .5)); linesAt.X = 30 * Seg(t, .1, .5);
+            flash.Opacity = .85 * Flash(t, .25, .1);
+            double b = Seg(t, .25, .6);
+            spark.Opacity = t < .25 ? 0 : 1 - b; spSc.ScaleX = spSc.ScaleY = .4 + .9 * Motion.Out(b); spRot.Angle = 40 * b;
+            double w = Seg(t, .26, .75);
+            wave.Opacity = t < .26 ? 0 : .95 * (1 - w); waveSc.ScaleX = 1 + .35 * Motion.Out(w); waveSc.ScaleY = 1 + .9 * Motion.Out(w);
+        }, () => { chip.RenderTransform = null; chip.Opacity = 1; chip.Children.Remove(flash); chip.Children.Remove(wave); chip.Children.Remove(spark); chip.Children.Remove(lines); });
     }
 
     /// <summary>
@@ -694,6 +744,42 @@ sealed partial class HudVersus : ModernLook
         else { Cinema(L.T("K.O."), SlamFill, null, 1300, drop: false, spark: true); Shimmer(); }
     }
 
+    /// <summary>A screen crack (drawn once): jagged white lines with dark edges out from the panel's middle, a few branches.</summary>
+    static void DrawCrack(DrawingContext dc, Size s)
+    {
+        if (s.Width < 20) return;
+        var c = new Point(s.Width / 2, s.Height / 2);
+        var rnd = new Random(41);
+        var dark = Mod.P(Frozen(Mod.A(Colors.Black, .7)), 3.2, round: true);
+        var lit = Mod.P(Frozen(Mod.A(Colors.White, .85)), 1.3, round: true);
+        var g = new StreamGeometry();
+        using (var x = g.Open())
+        {
+            for (int i = 0; i < 7; i++)
+            {
+                double a = 2 * Math.PI * i / 7 + .4 * rnd.NextDouble(), reach = Math.Max(s.Width, s.Height) * (.35 + .25 * rnd.NextDouble());
+                var p = c; x.BeginFigure(p, false, false);
+                for (int k = 1; k <= 5; k++)
+                {
+                    double r = reach * k / 5, jag = (rnd.NextDouble() - .5) * .5;
+                    var q = new Point(c.X + r * Math.Cos(a + jag), c.Y + r * Math.Sin(a + jag) * .6);
+                    x.LineTo(q, true, false);
+                    if (k == 2 && i % 2 == 0)
+                    {
+                        // a branch off it
+                        x.BeginFigure(q, false, false);
+                        x.LineTo(new Point(q.X + reach * .18 * Math.Cos(a + .9), q.Y + reach * .12 * Math.Sin(a + .9)), true, false);
+                        x.BeginFigure(q, false, false);
+                    }
+                    p = q;
+                }
+            }
+        }
+        g.Freeze();
+        dc.DrawGeometry(null, dark, g);
+        dc.DrawGeometry(null, lit, g);
+    }
+
     /// <summary>A slam over the fight: the word, a dark band behind it, streaks, a flash frame (white, or dark for a drop), a spark and a ring for a kill.</summary>
     void Cinema(string word, Brush fill, Color? edge, double ms, bool drop, bool spark)
     {
@@ -711,6 +797,15 @@ sealed partial class HudVersus : ModernLook
         var lineAt = new TranslateTransform(); lines.RenderTransform = lineAt;
         var flash = new System.Windows.Shapes.Rectangle { Fill = drop ? Frozen(Colors.Black) : White, Opacity = 0 };
         var parts = new List<UIElement> { band, lines };
+        // a wipe cracks the screen as a K.O. never does (2026-11-21 review: they read alike): a veil sags over the panel and
+        // a crack runs out from where the word lands, both drawn once, gone as the word parks
+        TacSketch? crack = null; System.Windows.Shapes.Rectangle? veil = null;
+        if (drop)
+        {
+            veil = new System.Windows.Shapes.Rectangle { Fill = Frozen(Mod.A(Colors.Black, .36)), Opacity = 0, IsHitTestVisible = false };
+            crack = new TacSketch((dc, s) => DrawCrack(dc, s)) { Opacity = 0, IsHitTestVisible = false };
+            parts.Insert(0, veil); parts.Add(crack);
+        }
         TacSketch? burst = null; ScaleTransform? bs = null; RotateTransform? br = null;
         System.Windows.Shapes.Ellipse? ring = null;
         if (spark)
@@ -725,28 +820,68 @@ sealed partial class HudVersus : ModernLook
         _fightFx.Children.Clear();
         foreach (var el in parts) _fightFx.Children.Add(el);
         var head = _head;
+        // where the word rests once it has hit: over the head (the boss's banner and the round timer), small, so every row's
+        // figures read again within about 0.4 s while the word stays on screen (2026-11-21: the K.O. covered rows 2 and 3)
+        double headY = h * .18;
+        try { if (head != null && head.ActualHeight > 0) headY = head.TranslatePoint(new Point(0, head.ActualHeight / 2), _fightFx).Y; } catch (InvalidOperationException) { }
+        double rest = Math.Clamp((head?.ActualHeight ?? 34) * 1.45 / Math.Max(1, slam.Height), .4, .7);
+        double liftY = Math.Max(headY, slam.Height * rest / 2 + 2) - h / 2;
+        var rot = new RotateTransform(0);
+        ((TransformGroup)slam.RenderTransform).Children.Insert(1, rot);
+        // start: the word flies at the camera and is gone (scale up, fade) instead of resting
+        bool start = !drop && !spark;
+        double hit = drop ? .17 : .15, leave = .24, gone = .34;
         Motion.Play(_fightFx, ms, t =>
         {
-            // in: the band snaps open, the word slams from big (or drops from above), a flash frame as it lands
-            double land = Seg(t, 0, .2);
-            bandSc.ScaleY = Out(Seg(t, 0, .1));
-            band.Opacity = t < .78 ? 1 : 1 - Seg(t, .78, .98);
-            if (drop) { ss.ScaleX = ss.ScaleY = 1; sy.Y = -h * .4 * (1 - Back(land, 1.6)); }
-            else { ss.ScaleX = ss.ScaleY = SlamScale(land, 2.3); sy.Y = 0; }
-            slam.Opacity = t < .75 ? Seg(t, 0, .06) : 1 - Seg(t, .75, .95);
-            flash.Opacity = (drop ? .4 : .5) * Flash(t, .14, .09);
-            lines.Opacity = t < .1 ? 0 : .9 * (1 - Seg(t, .2, .7));
-            lineAt.X = -w * .3 + w * .5 * Seg(t, .1, .7);
+            // in: the band snaps open, the word slams from big (or drops from above, heavy), a flash frame as it lands
+            double land = Seg(t, 0, hit + .03);
+            bandSc.ScaleY = t < leave ? Out(Seg(t, 0, .08)) : 1 - Ez.InOut(Seg(t, leave, gone));
+            band.Opacity = t < gone ? 1 : 0;
+            double l = Seg(t, leave, gone), k = Ez.InOut(l);
+            if (drop)
+            {
+                // a wipe: falls hard, a dead thud, then sags onto the banner, tipped like a fallen sign
+                ss.ScaleX = ss.ScaleY = 1 + (rest - 1) * k;
+                sy.Y = -h * .45 * (1 - Back(land, 1.2)) * (1 - k) + liftY * k;
+                rot.Angle = 5 * k;
+                slam.Opacity = t < .7 ? Seg(t, 0, .05) : 1 - Seg(t, .7, .85);
+            }
+            else if (start)
+            {
+                ss.ScaleX = ss.ScaleY = SlamScale(land, 2.3) * (1 + 1.4 * Ez.In(l));
+                sy.Y = 0;
+                slam.Opacity = t < leave ? Seg(t, 0, .05) : 1 - Out(l);
+            }
+            else
+            {
+                // a kill: slams in, holds a beat while the panel shakes, then lifts and stamps onto the head, a little turned
+                double sc = SlamScale(land, 2.3);
+                ss.ScaleX = ss.ScaleY = sc + (rest - sc) * k;
+                sy.Y = liftY * k;
+                rot.Angle = -4 * k;
+                slam.Opacity = t < .7 ? Seg(t, 0, .05) : 1 - Seg(t, .7, .85);
+            }
+            flash.Opacity = (drop ? .45 : .55) * Flash(t, hit, .08);
+            if (veil != null) veil.Opacity = t < hit ? 0 : t < .5 ? Out(Seg(t, hit, hit + .06)) : 1 - Seg(t, .5, .7);
+            if (crack != null) crack.Opacity = t < hit ? 0 : t < .3 ? 1 : 1 - Seg(t, .3, .5);
+            lines.Opacity = t < .06 ? 0 : .9 * (1 - Seg(t, .14, gone));
+            lineAt.X = -w * .3 + w * .5 * Seg(t, .06, gone);
+            // the hit shakes the whole panel: a sideways jolt for a kill, a dead vertical thud for a wipe, a light one at the start
+            double s = Seg(t, hit, hit + .14);
+            // (not at the start: the panel's own slide in owns its shift then)
+            double jolt = Ez.Jolt(s, drop ? 5 : 6);
+            if (drop) { _fightShift.X = 0; _fightShift.Y = Math.Abs(jolt); }
+            else if (!start) { _fightShift.X = jolt; _fightShift.Y = jolt * .35; }
             if (burst != null)
             {
-                double b = Seg(t, .14, .7);
-                burst.Opacity = t < .14 ? 0 : .95 * (1 - b);
-                bs!.ScaleX = bs.ScaleY = .5 + .7 * Out(b); br!.Angle = 18 * b;
-                double r = Seg(t, .16, .8);
-                ring!.Opacity = t < .16 ? 0 : .9 * (1 - r);
-                ((ScaleTransform)ring.RenderTransform).ScaleX = ((ScaleTransform)ring.RenderTransform).ScaleY = .2 + .95 * Out(r);
+                double b = Seg(t, hit, .34);
+                burst.Opacity = t < hit ? 0 : .95 * (1 - b);
+                bs!.ScaleX = bs.ScaleY = .5 + .8 * Out(b); br!.Angle = 24 * b;
+                double r = Seg(t, hit + .02, .38);
+                ring!.Opacity = t < hit + .02 ? 0 : .9 * (1 - r);
+                ((ScaleTransform)ring.RenderTransform).ScaleX = ((ScaleTransform)ring.RenderTransform).ScaleY = .2 + 1.1 * Out(r);
             }
-            if (head != null) head.Opacity = t < .8 ? .35 : .35 + .65 * Seg(t, .8, 1);
-        }, () => { _fightFx.Children.Clear(); if (head != null) head.Opacity = 1; });
+            if (head != null) head.Opacity = start ? (t < gone ? .35 + .65 * Seg(t, leave, gone) : 1) : t < .72 ? .35 : .35 + .65 * Seg(t, .72, .9);
+        }, () => { _fightFx.Children.Clear(); if (!start) _fightShift.X = _fightShift.Y = 0; if (head != null) head.Opacity = 1; });
     }
 }

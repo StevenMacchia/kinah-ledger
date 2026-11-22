@@ -441,13 +441,16 @@ sealed partial class HudSticker : WackyLook, IThemeCard
         var grade = (p.Grade.Length > 0 ? L.T(p.Grade) : L.T("Rare")).ToUpperInvariant() + "!";
         words.Children.Add(Wk.Outlined(grade, Wk.Impact, FontWeights.Normal, 13, YelB, K, 2.2));
         words.Children.Add(Wk.Outlined(p.Name, Wk.Heavy, FontWeights.Black, 13, WhiteB, K, 2.4));
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { Tile(p, 30, glow: true), words } };
+        // (the tile without its count badge: in a small window the slam lands over the hour, and the badge's "×1" ran over its
+        // digits; the drop's count is on the line's strip under it)
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { Tile(p with { Count = "" }, 30, glow: true), words } };
         row.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double rx = Math.Max(66, row.DesiredSize.Width / 2 + 30);
         var burst = Wk.Burst(rx, 26, 22, .8, 11, Wk.S(Wk.Hex(c)), K, 3, 5, row);
         // a banner burst slapped across the line's top edge: the hour and the session stay in view under it
         var at = At(_pill, .78, 0);
-        SlapOn(burst, new Point(at.X, at.Y - 30), "rare", 2700, 2.3, -14, -3, .18, .62, (rx * .95, rx * 1.25, 12, 5));
+        // (from 1.7, it was 2.3: a slam from that big ran far over the hour, 2026-11-21)
+        SlapOn(burst, new Point(at.X, at.Y - 33), "rare", 2700, 1.7, -14, -3, .18, .62, (rx * .95, rx * 1.25, 12, 5));
     }
 
     protected override void BestPassed(bool held)

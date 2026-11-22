@@ -505,6 +505,8 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
         // it flips up out of the card's top edge and hovers above it, off the figures
         var at = At(_blob.Root, .72, 0);
         Jiggle(_blob, 900, .035);
+        // foil shards in the grade's colour burst out from under it as the bubble flips up: the big one, never a pickup's pop
+        Shards(new Point(at.X, at.Y - 10), Wk.Vivid(c), 10, 80, 1500, .08, "rare-shards");
         Float(b, c, new Point(at.X, at.Y - 2), 18, "rare", 2700, .66, 14, 7);
     }
 

@@ -79,7 +79,15 @@ sealed partial class HudDragon
     internal sealed class DragonRow : IThemeRow, IThemeBarSpan
     {
         public const double H = 26, Pitch = 29;
-        static readonly LinearGradientBrush NameBand = Mod.Grad(false, (Mod.A(Colors.Black, .34), 0), (Mod.A(Colors.Black, .26), .6), (Mod.A(Colors.Black, 0), 1));
+        static readonly LinearGradientBrush FigShade = FigShadeOf();
+        static LinearGradientBrush FigShadeOf()
+        {
+            var b = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(14, 0) };
+            b.GradientStops.Add(new GradientStop(Mod.A(Colors.Black, 0), 0)); b.GradientStops.Add(new GradientStop(Mod.A(Colors.Black, .5), 1));
+            b.Freeze();
+            return b;
+        }
+        static readonly LinearGradientBrush NameBand =Mod.Grad(false, (Mod.A(Colors.Black, .34), 0), (Mod.A(Colors.Black, .26), .6), (Mod.A(Colors.Black, 0), 1));
         static readonly Geometry Talon = G("M 0,3 C 3.5,6 4.8,10 4.6,13 C 4.4,17 3,20.5 0,23 Z");
         const double Pad = 3;
         readonly HudDragon _look;
@@ -227,8 +235,14 @@ sealed partial class HudDragon
             _share.Visibility = share ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        /// <summary>The fire's room: the row up to its figures (the DPS and the share sit on the dark at its end).</summary>
-        double FireW(double w)
+        /// <summary>
+        /// The fire's room: the whole row (2026-11-21: it stopped at the figures, about 80% once the damage and crit columns
+        /// took their room); under the figures it burns on a soft shade of the dark (<see cref="FigsAt"/>).
+        /// </summary>
+        static double FireW(double w) => Math.Max(20, w - 2);
+
+        /// <summary>Where the figures start, px from the row's left (the DPS, the share, the damage and the crit rate).</summary>
+        double FigsAt(double w)
         {
             var cols = _words.ColumnDefinitions;
             return Math.Max(20, w - 5 - cols[4].Width.Value - cols[5].Width.Value - cols[6].Width.Value - cols[7].Width.Value - 2);
@@ -244,10 +258,13 @@ sealed partial class HudDragon
         {
             if (_m is not { } m || s.Width < 20) return;
             double room = FireW(s.Width), fx = room * Math.Clamp(_bar, 0, 1);
-            // the track: a darker channel the fire runs in, the figures' end darker still
+            // the track: a darker channel the fire runs in; the figures' end on a soft shade over the fire
             dc.DrawRoundedRectangle(Frozen(Mod.A(Colors.Black, .3)), null, new Rect(0, 2, s.Width, s.Height - 4), 3, 3);
-            dc.DrawRectangle(Mod.Grad(false, (Mod.A(Colors.Black, 0), 0), (Mod.A(Colors.Black, .3), 1)), null, new Rect(room - 10, 2, s.Width - room + 10, s.Height - 4));
             if (fx > .5) Fire(dc, new Rect(0, 2, room, s.Height - 4), Math.Max(fx, 6), m.ClassColor, _lead, m.Id);
+            double figs = FigsAt(s.Width);
+            dc.PushTransform(new TranslateTransform(figs - 14, 0));   // (the shade's ramp is in the drawing's own px from here)
+            dc.DrawRectangle(FigShade, null, new Rect(0, 2, s.Width - figs + 14, s.Height - 4));
+            dc.Pop();
             if (fx > 24) dc.DrawRectangle(NameBand, null, new Rect(0, 2, Math.Min(fx - 10, 170), s.Height - 4));
             // you: an ivory talon at the stream's source
             if (m.You) dc.DrawGeometry(Mod.Grad(true, (Color.FromRgb(0xFF, 0xF8, 0xE6), 0), (IvoryC, .5), (Color.FromRgb(0x9C, 0x8A, 0x66), 1)), Mod.P(Frozen(Color.FromArgb(0xCC, 0x10, 0x0C, 0x08)), .6),
