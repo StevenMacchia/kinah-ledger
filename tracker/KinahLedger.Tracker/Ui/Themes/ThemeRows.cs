@@ -24,7 +24,12 @@ public sealed record MeterMember(Fighter F, int Rank, bool You, bool Pinned, str
 {
     public long Id => F.Id;
     /// <summary>A row of the PvP panel (Parser/PvpKills.cs): <see cref="Cp"/> says who landed an assist's kill, never Combat Power.</summary>
-    public bool Pvp => Class is ClassArt.PvpKill or ClassArt.PvpAssist;
+    public bool Pvp => ClassArt.IsPvp(Class);
+    /// <summary>The PvP panel's "Killed by" row: no rank of its own, <see cref="DiedMark"/> in the rank's place.</summary>
+    public bool Died => Class == ClassArt.PvpDeath;
+    /// <summary>What a look's rank slot says: the rank (<paramref name="format"/>, "00" for "06"), or × on the "Killed by" row.</summary>
+    public string RankText(string format = "") => Died ? DiedMark : Rank.ToString(format, CultureInfo.InvariantCulture);
+    public const string DiedMark = "×";
 }
 
 /// <summary>What a row is drawn in: the fight, its moment, whether effects play, the meter's mode and the key for its motion.</summary>
@@ -100,6 +105,8 @@ public sealed class ThemeRows : Grid
         var you = all.FirstOrDefault(f => f.You);
         bool pin = you != null && !visible.Contains(you);
         if (pin) visible = all.Take(max - 1).Append(you!).ToList();
+        // the PvP panel's "Killed by" row is its last, kept when the kills fill the rows
+        if (all.LastOrDefault() is { Class: ClassArt.PvpDeath } died && !visible.Contains(died)) visible = all.Take(max - 1).Append(died).ToList();
         bool dmg = e.HasDamage;
         var view = expanded && dmg ? FightView.Of(e, now, null) : null;
         long topDps = e.TopDps(now)?.Id ?? long.MinValue, topHeals = e.TopHealer(now)?.Id ?? long.MinValue;

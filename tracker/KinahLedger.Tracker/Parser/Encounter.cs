@@ -425,12 +425,21 @@ public sealed class Encounter : IJsonOnDeserialized
     public (Encounter E, Fighter F) CardOf(Fighter f) => PvpOf(f) is { Fight: var pf } && pf.You is { } y ? (pf, y) : (this, f);
 
     /// <summary>The PvP panel's share-column words, in the language in use: a look's share column is as wide as the widest.</summary>
-    public static string[] PvpWords => new[] { Ui.L.T("Kill"), Ui.L.T("Assist") };
+    public static string[] PvpWords => new[] { Ui.L.T("Kill"), Ui.L.T("Assist"), Ui.L.T("Died") };
 
-    /// <summary>A PvP panel row's share column: "Kill" or "Assist".</summary>
-    public static string PvpWord(PvpKill k) => k.Assist ? Ui.L.T("Assist") : Ui.L.T("Kill");
-    /// <summary>A PvP panel row's line beside the name: who landed the kill you assisted ("by Tilly"), else empty.</summary>
-    public static string PvpBy(PvpKill k) => k.Assist && k.Killer.Length > 0 ? Ui.L.F("by {0}", k.Killer) : "";
+    /// <summary>A PvP panel row's share column: "Kill", "Assist", or "Died" on the "Killed by" row.</summary>
+    public static string PvpWord(PvpKill k) => k.Death ? Ui.L.T("Died") : k.Assist ? Ui.L.T("Assist") : Ui.L.T("Kill");
+    /// <summary>
+    /// A PvP panel row's line beside the name: the other player's Combat Power when known ("CP 178.3K"; Steven, 2026-11-23:
+    /// "also shows the Combat power of the person who u killed / killed u"), and who landed the kill you assisted ("by Tilly");
+    /// empty when neither is known.
+    /// </summary>
+    public static string PvpBy(PvpKill k)
+    {
+        var cp = k.Cp > 0 ? Ui.L.T("CP") + " " + Ui.Amounts.Meter(k.Cp) : "";
+        var by = k.Assist && k.Killer.Length > 0 ? Ui.L.F("by {0}", k.Killer) : "";
+        return cp.Length > 0 && by.Length > 0 ? cp + " · " + by : cp + by;
+    }
     /// <summary>The panel's figure for a kill: your damage on them ("412.3K"), "–" when no hit of yours on them was seen.</summary>
     public static string PvpFigure(PvpKill k) => k.Damage > 0 ? Ui.Amounts.Meter(k.Damage) : "–";
 
@@ -439,12 +448,13 @@ public sealed class Encounter : IJsonOnDeserialized
     {
         get
         {
-            if (Pvp is not { Count: > 0 } k) return "";
+            if (Pvp is not { Count: > 0 } all) return "";
+            var k = all.Where(x => !x.Death).ToList();
             int kills = k.Count(x => !x.Assist), assists = k.Count - kills;
             var bits = new List<string>();
             if (kills > 0) bits.Add(kills == 1 ? Ui.L.T("1 kill") : Ui.L.F("{0} kills", kills));
             if (assists > 0) bits.Add(assists == 1 ? Ui.L.T("1 assist") : Ui.L.F("{0} assists", assists));
-            bits.Add(Ui.L.F("{0} dealt", Ui.Amounts.Meter(k.Sum(x => x.Damage))));
+            bits.Add(Ui.L.F("{0} dealt", Ui.Amounts.Meter(all.Sum(x => x.Damage))));   // the Killed by row's too: damage you dealt
             return string.Join(" · ", bits);
         }
     }

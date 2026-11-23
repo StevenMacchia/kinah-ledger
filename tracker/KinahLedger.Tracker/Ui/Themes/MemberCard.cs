@@ -78,7 +78,7 @@ public static class ThemeText
     {
         "gladiator" => L.T("Gladiator"), "templar" => L.T("Templar"), "assassin" => L.T("Assassin"), "ranger" => L.T("Ranger"),
         "sorcerer" => L.T("Sorcerer"), "spiritmaster" => L.T("Spiritmaster"), "cleric" => L.T("Cleric"), "chanter" => L.T("Chanter"),
-        _ => cls is ClassArt.PvpKill or ClassArt.PvpAssist ? "" : cls ?? "",
+        _ => ClassArt.IsPvp(cls) ? "" : cls ?? "",
     };
 
     /// <summary>The class's icon with its name, in the language in use, as its hover text.</summary>

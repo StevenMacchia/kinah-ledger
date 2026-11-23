@@ -172,7 +172,7 @@ sealed partial class HudPrism
                 _words.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? _dmgW : 0);
                 _words.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? _critW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             bool crowned = Crowned;
             if (m.Class != _cls)
             {

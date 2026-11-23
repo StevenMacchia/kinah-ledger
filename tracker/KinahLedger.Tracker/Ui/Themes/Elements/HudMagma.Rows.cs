@@ -217,7 +217,7 @@ sealed partial class HudMagma
                 _words.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? _dmgW : 0);
                 _words.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? _critW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             // the crown on the top row once there is damage (by Combat Power before it, the rank stays a number)
             _crown = m.Rank == 1 && !m.CpOnly && !m.Pvp;
             _crownHost.Visibility = _crown ? Visibility.Visible : Visibility.Collapsed;

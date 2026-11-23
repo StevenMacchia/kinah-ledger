@@ -17,11 +17,13 @@ public static partial class WpfApp
     /// <summary>
     /// Five kills through the real rules, newest first: a kill of Kaelith (your hits over 14 s), an assist on Veyra that Tilly
     /// landed (your hits 6 s before), a kill of Morrigan (a longer fight), an assist on Doran that Brakk landed, a kill of
-    /// Seraphine. Your class is a Templar's, so the skills are named.
+    /// Seraphine; then your death at Nyx's hand (the "Killed by" row). Combat Power known for Kaelith, Veyra, Doran and Nyx,
+    /// not for Morrigan and Seraphine. Your class is a Templar's, so the skills are named.
     /// </summary>
-    internal static PvpKills PvpSample(DateTime now)
+    internal static PvpKills PvpSample(DateTime now, bool death = true)
     {
-        var p = new PvpKills { Self = () => ("", "Templar"), Place = "Abyss" };
+        var cps = new Dictionary<string, long> { ["Kaelith"] = 178_340, ["Veyra"] = 142_960, ["Doran"] = 96_410, ["Nyx"] = 231_550 };
+        var p = new PvpKills { Self = () => ("", "Templar"), Place = "Abyss", CpOf = (_, n) => cps.TryGetValue(n, out var v) ? v : 0 };
         var rnd = new Random(7);
         int[] skills = { 12090000, 12040000, 12100000, 12010000, 12060003 };
         void Fight(uint victim, string name, DateTime end, int seconds, int hitsEach, int lo, int hi)
@@ -43,6 +45,9 @@ public static partial class WpfApp
         p.Take(new FightEvent(t2, FightKind.Kill, FightFlags.OtherKiller | FightFlags.VictimPlayer | FightFlags.VictimEnemy, 3002, 4004, 0, 0, 0, "Veyra", "Tilly"));
         var t1 = now.AddSeconds(-20); Fight(3001, "Kaelith", t1, 14, 2, 10_000, 24_000);
         p.Take(new FightEvent(t1, FightKind.Kill, FightFlags.Mine | FightFlags.VictimPlayer | FightFlags.VictimEnemy, 3001, 1, 0, 0, 0, "Kaelith", ""));
+        if (!death) return p;
+        var t0 = now.AddSeconds(-6); Fight(3006, "Nyx", t0.AddSeconds(-1), 5, 1, 8_000, 18_000);
+        p.Take(new FightEvent(t0, FightKind.Kill, FightFlags.VictimMe | FightFlags.VictimPlayer, 1, 3006, 0, 0, 0, "", "Nyx"));
         return p;
     }
 
@@ -82,6 +87,7 @@ public static partial class WpfApp
             if (HudThemes.Make(HudThemes.ModernGlass, true) is IThemeCard tc && MemberCard.Of(board, f, now) is { } mc) Save(tc.DrawCard(mc), Path.Combine(sub, "ui-pvp-card-glass.png"), 0, ShotGround);
             var assist = board.Roster[1];
             if (ParserRows.HoverCard(board, assist, now) is { } card2) Save(card2, Path.Combine(sub, "ui-pvp-card-assist.png"), 0, ShotGround);
+            if (ParserRows.HoverCard(board, board.Roster[^1], now) is { } card3) Save(card3, Path.Combine(sub, "ui-pvp-card-death.png"), 0, ShotGround);
         }
         finally { Motion.Still = still0; ParserRows.ExpandedPref = exp0; HudStackLook.FightWidth = width0; }
         Console.WriteLine($"wrote {Path.GetFullPath(sub)}");
@@ -101,6 +107,14 @@ public static partial class WpfApp
         var last = kills.Last;
         check(last.Select(k => k.Name).SequenceEqual(new[] { "Kaelith", "Veyra", "Morrigan", "Doran", "Seraphine" }) && last[1] is { Assist: true, Killer: "Tilly" } && last[3] is { Assist: true, Killer: "Brakk" } && last.All(k => k.Damage > 0),
             $"PvP panel sample: the last five, Kaelith, Veyra (assist, Tilly's kill), Morrigan, Doran (Brakk's), Seraphine, each with damage ({string.Join(", ", last.Select(k => $"{k.Name} {k.Damage:N0}"))})");
+        var died = kills.LastDeath;
+        check(died is { Name: "Nyx", Cp: 231_550, Death: true } && board.Roster[^1].Class == ClassArt.PvpDeath && board.Roster.Count == 6,
+            $"PvP panel sample: then Killed by Nyx (CP {died?.Cp:N0}), the panel's last row ({board.Roster.Count} rows)");
+        string killedBy = L.F("Killed by {0}", "Nyx");
+        // the CP the panel shows: Kaelith's, Veyra's (with "by Tilly"), Doran's, Nyx's; none for Morrigan or Seraphine
+        var cpsShown = board.Pvp!.Where(k => k.Cp > 0).Select(k => Amounts.Meter(k.Cp)).ToList();
+        string deathCp = Amounts.Meter(died?.Cp ?? 0);
+        var cpGaveWay = new List<string>();
         bool still0 = Motion.Still, exp0 = ParserRows.ExpandedPref;
         double width0 = HudStackLook.FightWidth;
         var wrong = new List<string>();
@@ -130,7 +144,9 @@ public static partial class WpfApp
                     bool Has(string s) => texts.Any(x => x.S.Contains(s, StringComparison.OrdinalIgnoreCase));
                     double YOf(string s) => texts.Where(x => x.S.Contains(s, StringComparison.OrdinalIgnoreCase)).Select(x => x.Y).DefaultIfEmpty(double.NaN).Min();
                     var miss = new List<string>();
-                    foreach (var k in last)
+                    // compact: the five rows are the last four kills and the Killed by row (its row is always shown)
+                    var shown = expanded ? last : last.Take(ParserRows.CompactRows - 1).ToList();
+                    foreach (var k in shown)
                     {
                         if (!Has(k.Name)) miss.Add(k.Name);
                         if (!Has(Encounter.PvpFigure(k))) miss.Add(Encounter.PvpFigure(k));
@@ -138,7 +154,15 @@ public static partial class WpfApp
                     if (!Has("Kill")) miss.Add("Kill");
                     if (!Has("Assist")) miss.Add("Assist");
                     if (!Has("by Tilly")) miss.Add("by Tilly");
-                    for (int i = 1; i < last.Count; i++) if (!(YOf(last[i - 1].Name) < YOf(last[i].Name))) { miss.Add("newest first"); break; }
+                    if (!Has(killedBy)) miss.Add(killedBy);
+                    if (!Has(L.T("Died"))) miss.Add("Died");
+                    // a crowded row drops its CP before its name is cut (the meter's rule since 0.10.132): the Killed by row's long
+                    // name can leave no room for the killer's CP in a narrow look; noted, failed only if it is more than a few
+                    foreach (var cp in cpsShown.Where(x => x != deathCp)) if (!Has(cp)) miss.Add(cp);
+                    if (!Has(deathCp)) cpGaveWay.Add(tag);
+                    for (int i = 1; i < shown.Count; i++) if (!(YOf(shown[i - 1].Name) < YOf(shown[i].Name))) { miss.Add("newest first"); break; }
+                    if (!(YOf(killedBy) > YOf(shown[^1].Name))) miss.Add("Killed by last");
+                    if (texts.Any(x => x.S.Contains("Morrigan", StringComparison.OrdinalIgnoreCase) && x.S.Contains(L.T("CP"), StringComparison.Ordinal))) miss.Add("Morrigan's unknown CP shown");
                     if (texts.Any(x => x.S.Contains("Group DPS", StringComparison.OrdinalIgnoreCase) || x.S.Contains("Uptime", StringComparison.OrdinalIgnoreCase))) miss.Add("no group DPS");
                     if (texts.Any(x => x.S.Contains("CP by", StringComparison.OrdinalIgnoreCase) || x.S.Equals("CP", StringComparison.OrdinalIgnoreCase))) miss.Add("no CP word");
                     if (texts.Any(x => System.Text.RegularExpressions.Regex.IsMatch(x.S, @"(^|\s|T\+)\d{1,2}:\d\d(\s|$)"))) miss.Add("no clock");
@@ -152,7 +176,7 @@ public static partial class WpfApp
                 }
         }
         finally { Motion.Still = still0; ParserRows.ExpandedPref = exp0; HudStackLook.FightWidth = width0; }
-        check(looks >= 40 && wrong.Count == 0, $"PvP panel in every meter look, compact and expanded ({looks} drawn): names newest first, damage, Kill/Assist, by Tilly, no group DPS, no CP word, no clock, nothing spilled or cut{(wrong.Count > 0 ? ":\n        " + string.Join("\n        ", wrong.Take(12)) : "")}");
+        check(looks >= 40 && wrong.Count == 0 && cpGaveWay.Count * 10 <= looks, $"PvP panel in every meter look, compact and expanded ({looks} drawn): names newest first, damage, Kill/Assist, by Tilly, CP where known, Killed by Nyx last, no group DPS, no CP word, no clock, nothing spilled or cut{(cpGaveWay.Count > 0 ? $"; the killer's CP gave way to the name in {cpGaveWay.Count} ({string.Join(", ", cpGaveWay)})" : "")}{(wrong.Count > 0 ? ":\n        " + string.Join("\n        ", wrong.Take(12)) : "")}");
 
         // a row's skills card: your fight with that player (your damage on them by skill)
         var row = board.Roster[0];
@@ -171,7 +195,7 @@ public static partial class WpfApp
         {
             w.PvpPanelForTest = true;
             w.PvpSourceForTest = (kills, true);
-            check(w.PvpBoard(null, now) is { Pvp.Count: 5 }, "PvP panel: in PvP with the switch on the meter is the panel, the last five");
+            check(w.PvpBoard(null, now) is { Pvp.Count: 6 }, "PvP panel: in PvP with the switch on the meter is the panel, the last five and Killed by");
             var pull = new Encounter { Mode = "boss", Boss = "Abyss Guardian", Kind = "World boss", Start = now, LastAt = now, HasDamage = true };
             check(w.PvpBoard(pull, now) == null, "...a boss pull there keeps the DPS meter");
             var world = new Encounter { Mode = "fight", Kind = "Abyss", Start = now, LastAt = now, HasDamage = true };

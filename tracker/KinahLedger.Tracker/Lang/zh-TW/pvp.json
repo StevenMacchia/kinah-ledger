@@ -6,7 +6,8 @@
   "1 assist": "1 助攻",
   "{0} assists": "{0} 助攻",
   "by {0}": "尾刀 {0}",
+  "Killed by {0}": "被 {0} 擊殺",
   "{0} dealt": "造成 {0}",
   "PvP kills in PvP": "PvP 區域顯示 PvP 擊殺",
-  "In the Abyss and the arenas the meter shows your last 5 player kills instead of the DPS: your damage on each, Kill or Assist, and your skills on them when the pointer rests on a row. A boss fight there keeps the DPS meter.": "在深淵與競技場中，計量表會以最近 5 次玩家擊殺取代 DPS：對每人造成的傷害、擊殺或助攻，指標停在列上時顯示你對其使用的技能。那裡的首領戰仍顯示 DPS 計量表。"
+  "In the Abyss and the arenas the meter shows your last 5 player kills instead of the DPS: your damage on each, Kill or Assist, and your skills on them when the pointer rests on a row. When a player kills you, Killed by and their name show below the kills until your next kill. A boss fight there keeps the DPS meter.": "在深淵與競技場中，計量表會以最近 5 次玩家擊殺取代 DPS：對每人造成的傷害、擊殺或助攻，指標停在列上時顯示你對其使用的技能。被玩家擊殺時，擊殺列表下方會顯示對方名稱，直到你下一次擊殺。那裡的首領戰仍顯示 DPS 計量表。"
 }

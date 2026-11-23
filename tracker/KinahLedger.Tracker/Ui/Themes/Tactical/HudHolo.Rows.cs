@@ -175,7 +175,7 @@ sealed partial class HudHolo
                 _root.ColumnDefinitions[4].Width = new GridLength(c.Expanded ? _dmgW : 0);
                 _root.ColumnDefinitions[5].Width = new GridLength(c.Expanded ? _critW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             _name.Text = m.Name;
             // the name in a light tint of its class: it reads on its own class's light
             _name.Foreground = Frozen(Tac.Mix(m.NameColor, Colors.White, .4));

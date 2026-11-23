@@ -157,7 +157,7 @@ sealed partial class HudModernMono
                 _root.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? DmgW : 0);
                 _root.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? CritW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             var ik = m.Class + "|" + (m.Name.Length > 0 ? m.Name[..1] : "");
             if (ik != _iconKey) { _iconKey = ik; _icon.Children.Clear(); _icon.Children.Add(ClassMark(m.Class, m.Name, 16)); }
             _name.Text = m.Name;

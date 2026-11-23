@@ -92,5 +92,47 @@ static class PvpKillsTests
         check(b.Title == "Last PvP kills" && b.ClockText(t) == "" && !b.HeldAverage && !b.Live && b.Kind == "Abyss", "...titled, no clock, no fight's average badge, where it is");
         var empty = PvpKills.BoardOf(Array.Empty<PvpKill>(), "Abyss", t);
         check(empty is { Waiting: true, HasDamage: false } && empty.ReadyText == "No PvP kills yet", "...before a kill: a waiting card that says so");
+
+        // Combat Power beside the other player's name (Steven, 2026-11-23): the tracker's figure when it has one, nothing when not
+        var cps = new Dictionary<string, long> { ["Jory"] = 178_340, ["Kess"] = 142_960, ["Nyx"] = 231_550 };
+        var c = new PvpKills { Self = () => ("", "Templar"), CpOf = (_, n) => cps.TryGetValue(n, out var v) ? v : 0 };
+        c.Take(Hit(t, 501, "Jory", 12010000, 20_000));
+        c.Take(Mine(t.AddSeconds(1), 501, "Jory"));
+        c.Take(Hit(t.AddSeconds(10), 502, "Kess", 12010000, 9_000));
+        c.Take(Others(t.AddSeconds(11), 502, "Kess", "Tilly"));
+        c.Take(Hit(t.AddSeconds(20), 503, "Lune", 12010000, 9_000));
+        c.Take(Mine(t.AddSeconds(21), 503, "Lune"));
+        var (jory, kess, lune) = (c.Last[2], c.Last[1], c.Last[0]);
+        check(jory.Cp == 178_340 && Encounter.PvpBy(jory) == "CP 178.3K", $"PvP panel: a kill shows the player's Combat Power beside the name ({Encounter.PvpBy(jory)})");
+        check(kess.Cp == 142_960 && Encounter.PvpBy(kess) == "CP 143K · by Tilly", $"...an assist its CP and who landed the kill ({Encounter.PvpBy(kess)})");
+        check(lune.Cp == 0 && Encounter.PvpBy(lune) == "" && c.Board(t).Roster.First(f => f.Name == "Lune").CombatPower == 0,
+            $"...an unknown CP shows nothing, no placeholder, no guess (\"{Encounter.PvpBy(lune)}\")");
+
+        // your death at a player's hand: the panel's last row, "Killed by Nyx", their CP, your damage on them, until your next kill
+        int was = c.Version;
+        c.Take(Hit(t.AddSeconds(30), 504, "Nyx", 12010000, 31_000));
+        c.Take(Hit(t.AddSeconds(32), 504, "Nyx", 12040000, 14_000));
+        c.Take(new FightEvent(t.AddSeconds(34), FightKind.Kill, FightFlags.VictimMe | FightFlags.VictimPlayer, 1, 504, 0, 0, 0, "", "Nyx"));
+        c.Take(new FightEvent(t.AddSeconds(35), FightKind.Kill, FightFlags.VictimMe | FightFlags.VictimPlayer, 1, 504, 0, 0, 0, "", "Nyx"));   // the same death said again
+        var died = c.LastDeath;
+        var db = c.Board(t.AddSeconds(40));
+        var last = db.Roster[^1];
+        check(died is { Death: true, Name: "Nyx", Cp: 231_550, Damage: 45_000 } && c.Version == was + 1 && c.Last.Count == 3,
+            $"...your death: Killed by Nyx, their CP, your 45,000 damage on them, once, never a kill ({died?.Name}, {died?.Cp:N0}, {died?.Damage:N0}, version +{c.Version - was})");
+        check(db.Roster.Count == 4 && last is { Name: "Nyx", Class: Ui.ClassArt.PvpDeath, CombatPower: 231_550 } && Ui.ParserRows.NameOf(last) == "Killed by Nyx" && Ui.ClassArt.KillerOf("Killed by Nyx") == "Nyx" && Encounter.PvpWord(db.PvpOf(last)!) == "Died"
+            && Encounter.PvpBy(db.PvpOf(last)!) == "CP 231.6K" && db.DpsOf(last, t) == 45_000 && db.PvpFoot == "2 kills · 1 assist · 83K dealt",
+            $"...the panel's last row says Killed by Nyx, Died, their CP, the loss's own tint; the foot counts kills, the damage all of it ({last.Name}, {last.Class}, {db.PvpFoot})");
+        var (de, df) = db.CardOf(last);
+        check(de.Outcome == "died" && df is { You: true, Damage: 45_000 }, $"...its skills card is your fight with your killer ({de.Outcome}, {df.Damage:N0})");
+        c.Take(new FightEvent(t.AddSeconds(50), FightKind.Kill, FightFlags.VictimMe, 1, 0, 9001, 0, 0, "", ""));   // a monster's: no player named
+        check(c.LastDeath?.Name == "Nyx", "...a death to a monster leaves the Killed by row as it was");
+        c.Take(Hit(t.AddSeconds(60), 505, "Mira", 12010000, 9_000));
+        c.Take(Mine(t.AddSeconds(61), 505, "Mira"));
+        check(c.LastDeath == null && c.Board(t).Roster.All(f => f.Class != Ui.ClassArt.PvpDeath) && c.Last[0].Name == "Mira", "...your next kill clears it");
+        var lone = new PvpKills { CpOf = (_, _) => 0 };
+        lone.Take(new FightEvent(t, FightKind.Kill, FightFlags.VictimMe | FightFlags.VictimPlayer, 1, 601, 0, 0, 0, "", "Orin"));
+        var lb = lone.Board(t);
+        check(lb is { Waiting: false, HasDamage: true } && lb.Roster is [{ Name: "Orin", Class: Ui.ClassArt.PvpDeath }] && Encounter.PvpBy(lb.PvpOf(lb.Roster[0])!) == "" && Encounter.PvpFigure(lb.PvpOf(lb.Roster[0])!) == "–",
+            "...a death before any kill: the panel is its Killed by row alone (no CP known: nothing; no hit of yours: –)");
     }
 }

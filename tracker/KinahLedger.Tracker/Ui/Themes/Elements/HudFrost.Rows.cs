@@ -184,7 +184,7 @@ sealed partial class HudFrost
                 _words.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? _dmgW : 0);
                 _words.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? _critW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             // the snowflake crown on the top row once there is damage (by Combat Power before it, the rank stays a number)
             bool crown = m.Rank == 1 && !m.CpOnly && !m.Pvp;
             _crown.Visibility = crown ? Visibility.Visible : Visibility.Collapsed;   // the rank's numeral always shows (on the crown's heart at rank 1)

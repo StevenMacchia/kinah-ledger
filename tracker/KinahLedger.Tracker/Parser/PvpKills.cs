@@ -8,7 +8,10 @@ namespace KinahLedger.Parser;
 /// the meter's skills card shows as it shows a member's in a boss fight.
 /// </summary>
 /// <param name="Seq">This kill's number since the tracker started: its row's key.</param>
-public sealed record PvpKill(long Seq, DateTime At, uint VictimId, string Name, bool Assist, string Killer, Encounter Fight)
+/// <param name="Cp">The other player's Combat Power when the tracker knows it (0: not known, and nothing is shown for it).</param>
+/// <param name="Death">This is your death at that player's hand, not a kill (the panel's "Killed by" row): VictimId and Name are
+/// the killer's, and the fight is your damage on them.</param>
+public sealed record PvpKill(long Seq, DateTime At, uint VictimId, string Name, bool Assist, string Killer, Encounter Fight, long Cp = 0, bool Death = false)
 {
     /// <summary>Your damage on them in the fight that ended with their death (0: no hit of yours on them was seen).</summary>
     public long Damage => Fight.You?.Damage ?? 0;
@@ -49,6 +52,8 @@ public sealed class PvpKills
     /// <summary>Enemy players' deaths by others' hands with no hit of yours yet: an assist if your hit comes within HitAfter.</summary>
     readonly List<FightEvent> _pending = new();
     readonly List<PvpKill> _last = new();
+    /// <summary>Your last death at a player's hand, until your next kill or assist (the panel's "Killed by" row).</summary>
+    PvpKill? _death;
     long _seq;
     int _version;
 
@@ -58,12 +63,20 @@ public sealed class PvpKills
     public Func<(string Name, string Class)>? Self { get; set; }
     /// <summary>Where the fights are: "Abyss" or the arena's name (set by the session).</summary>
     public string Place { get; set; } = "Abyss";
+    /// <summary>
+    /// A player's Combat Power by their id and name when the tracker knows it, else 0 (asked when a kill or death is added).
+    /// Never a guess: an unknown CP shows nothing.
+    /// </summary>
+    public Func<uint, string, long>? CpOf { get; set; }
 
-    /// <summary>Goes up with each kill or assist added.</summary>
+    /// <summary>Goes up with each kill, assist or death added.</summary>
     public int Version { get { lock (_gate) return _version; } }
 
     /// <summary>The last kills, newest first (at most <see cref="Kept"/>).</summary>
     public IReadOnlyList<PvpKill> Last { get { lock (_gate) return _last.ToList(); } }
+
+    /// <summary>Your last death at a player's hand since your last kill or assist (null: none): the panel's "Killed by" row.</summary>
+    public PvpKill? LastDeath { get { lock (_gate) return _death; } }
 
     public void Take(FightEvent e)
     {
@@ -101,7 +114,8 @@ public sealed class PvpKills
     bool Kill(FightEvent e)
     {
         _pending.RemoveAll(d => (e.At - d.At).TotalSeconds > FightTally.HitAfter);
-        if (e.Flags.HasFlag(FightFlags.VictimMe) || !e.Flags.HasFlag(FightFlags.VictimPlayer)) return false;
+        if (e.Flags.HasFlag(FightFlags.VictimMe)) return Died(e);
+        if (!e.Flags.HasFlag(FightFlags.VictimPlayer)) return false;
         if (e.Flags.HasFlag(FightFlags.Mine))
         {
             if (CountedAlready(e.VictimId, e.At)) return false;
@@ -113,6 +127,26 @@ public sealed class PvpKills
         if (CountedAlready(e.VictimId, e.At)) return false;
         Add(e, assist: true);
         return true;
+    }
+
+    /// <summary>
+    /// Your death (Steven, 2026-11-23: "'Killed by' as well at bottom when it happens"): at a player's hand, the game naming them,
+    /// it is the panel's "Killed by" row until your next kill or assist; a monster's (no killer's name) leaves the panel alone.
+    /// The same death twice within <see cref="SameDeathSeconds"/> is one.
+    /// </summary>
+    bool Died(FightEvent e)
+    {
+        var killer = e.KillerName.Trim();
+        if (killer.Length == 0) return false;
+        if (_death is { } was && Math.Abs((e.At - was.At).TotalSeconds) < SameDeathSeconds) return false;
+        var seq = ++_seq;
+        _death = new PvpKill(seq, e.At, e.KillerId, killer, false, "", FightWith(e.KillerId, killer, e.At, seq, "died"), Cp(e.KillerId, killer), Death: true);
+        return true;
+    }
+
+    long Cp(uint id, string name)
+    {
+        try { return Math.Max(0, CpOf?.Invoke(id, name) ?? 0); } catch (Exception) { return 0; }
     }
 
     bool CountedAlready(uint victim, DateTime at)
@@ -140,48 +174,67 @@ public sealed class PvpKills
 
     void Add(FightEvent e, bool assist)
     {
-        var hits = HitsOn(e.VictimId, e.At);
+        var seq = ++_seq;
+        var fight = FightWith(e.VictimId, e.VictimName.Trim(), e.At, seq, "kill");
+        if (!assist) { fight.YourKills = 1; fight.PlayerKills = 1; }
+        _last.Insert(0, new PvpKill(seq, e.At, e.VictimId, e.VictimName.Trim(), assist, assist ? e.KillerName.Trim() : "", fight, Cp(e.VictimId, e.VictimName.Trim())));
+        if (_last.Count > Kept) _last.RemoveRange(Kept, _last.Count - Kept);
+        _death = null;   // the "Killed by" row stays until your next kill or assist
+    }
+
+    /// <summary>Your fight with a player that ended at <paramref name="at"/> (their death or yours): your hits on them by skill.</summary>
+    Encounter FightWith(uint id, string name, DateTime at, long seq, string outcome)
+    {
+        var hits = HitsOn(id, at);
         var (you, cls) = ("", "");
         try { if (Self?.Invoke() is { } s) (you, cls) = (s.Name.Trim(), s.Class.Trim()); } catch (Exception) { }
-        var seq = ++_seq;
-        var start = hits.Count > 0 && hits[0].At < e.At ? hits[0].At : e.At;
+        var start = hits.Count > 0 && hits[0].At < at ? hits[0].At : at;
         var fight = new Encounter
         {
-            Id = $"pvp-{seq}", Mode = "fight", Kind = Place, Opponent = e.VictimName.Trim(),
-            Start = start, End = e.At, LastAt = e.At, Outcome = "kill", HasDamage = true,
-            YourKills = assist ? 0 : 1, PlayerKills = assist ? 0 : 1,
+            Id = $"pvp-{seq}", Mode = "fight", Kind = Place, Opponent = name,
+            Start = start, End = at, LastAt = at, Outcome = outcome, HasDamage = true,
         };
         var f = new Fighter { Id = 1, Name = you, Class = cls, You = true };
-        foreach (var (at, skill, dmg) in hits)
+        foreach (var (t, skill, dmg) in hits)
         {
             f.Damage += dmg;
-            f.Hit(at);
+            f.Hit(t);
             var a = f.Ability(skill);
             a.Damage += dmg; a.Hits++;
             a.StreamHits = (a.StreamHits ?? 0) + 1; a.StreamDamage = (a.StreamDamage ?? 0) + dmg;
             a.Max = Math.Max(a.Max ?? 0, dmg); a.Min = a.Min is { } mn ? Math.Min(mn, dmg) : dmg;
-            f.PerSecond = Fighter.AddAt(f.PerSecond, Math.Max(0, (int)(at - start).TotalSeconds), dmg);
+            f.PerSecond = Fighter.AddAt(f.PerSecond, Math.Max(0, (int)(t - start).TotalSeconds), dmg);
         }
         fight.Roster.Add(f);
-        _last.Insert(0, new PvpKill(seq, e.At, e.VictimId, e.VictimName.Trim(), assist, assist ? e.KillerName.Trim() : "", fight));
-        if (_last.Count > Kept) _last.RemoveRange(Kept, _last.Count - Kept);
+        return fight;
     }
 
     /// <summary>
     /// The panel as a record the meter's looks draw (Encounter.Pvp): one row per kill, newest first, its figure your damage on
-    /// them, its share column Kill or Assist. With no kill yet, a waiting card ("No PvP kills yet"). Never kept.
+    /// them, its share column Kill or Assist; then your last death at a player's hand, if any since your last kill ("Killed by",
+    /// your damage on them). With neither yet, a waiting card ("No PvP kills yet"). Never kept.
     /// </summary>
-    public Encounter Board(DateTime now) => BoardOf(Last, Place, now);
-
-    public static Encounter BoardOf(IReadOnlyList<PvpKill> kills, string place, DateTime now)
+    public Encounter Board(DateTime now)
     {
-        var newest = kills.Count > 0 ? kills[0].At : now;
+        lock (_gate) return BoardOf(_last.ToList(), Place, now, _death);
+    }
+
+    public static Encounter BoardOf(IReadOnlyList<PvpKill> kills, string place, DateTime now, PvpKill? death = null)
+    {
+        var rows = death != null ? kills.Where(k => !k.Death).Append(death).ToList() : kills;
+        var newest = rows.Count > 0 ? rows.Max(k => k.At) : now;
         var b = new Encounter
         {
             Id = "pvp-board", Mode = "fight", Kind = place, Start = newest, End = newest, LastAt = newest,
-            HasDamage = kills.Count > 0, Waiting = kills.Count == 0, Pvp = kills,
+            HasDamage = rows.Count > 0, Waiting = rows.Count == 0, Pvp = rows,
         };
-        foreach (var k in kills) b.Roster.Add(new Fighter { Id = k.Seq, Name = k.Name, Class = k.Assist ? Ui.ClassArt.PvpAssist : Ui.ClassArt.PvpKill, Damage = k.Damage, FirstHit = k.Fight.Start, LastHit = k.At });
+        foreach (var k in rows)
+            b.Roster.Add(new Fighter
+            {
+                Id = k.Seq, Name = k.Name, CombatPower = (int)Math.Clamp(k.Cp, 0, int.MaxValue),
+                Class = k.Death ? Ui.ClassArt.PvpDeath : k.Assist ? Ui.ClassArt.PvpAssist : Ui.ClassArt.PvpKill,
+                Damage = k.Damage, FirstHit = k.Fight.Start, LastHit = k.At,
+            });
         return b;
     }
 }

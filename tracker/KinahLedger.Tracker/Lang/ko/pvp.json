@@ -6,7 +6,8 @@
   "1 assist": "1 어시스트",
   "{0} assists": "{0} 어시스트",
   "by {0}": "막타 {0}",
+  "Killed by {0}": "{0}에게 사망",
   "{0} dealt": "{0} 피해",
   "PvP kills in PvP": "PvP 지역에서 PvP 처치",
-  "In the Abyss and the arenas the meter shows your last 5 player kills instead of the DPS: your damage on each, Kill or Assist, and your skills on them when the pointer rests on a row. A boss fight there keeps the DPS meter.": "어비스와 투기장에서는 미터가 DPS 대신 최근 플레이어 처치 5건을 보여줍니다: 각 대상에게 준 피해, 처치 또는 어시스트, 그리고 행에 포인터를 올리면 그 대상에게 쓴 스킬. 그곳의 보스 전투는 DPS 미터를 유지합니다."
+  "In the Abyss and the arenas the meter shows your last 5 player kills instead of the DPS: your damage on each, Kill or Assist, and your skills on them when the pointer rests on a row. When a player kills you, Killed by and their name show below the kills until your next kill. A boss fight there keeps the DPS meter.": "어비스와 투기장에서는 미터가 DPS 대신 최근 플레이어 처치 5건을 보여줍니다: 각 대상에게 준 피해, 처치 또는 어시스트, 그리고 행에 포인터를 올리면 그 대상에게 쓴 스킬. 플레이어에게 처치당하면 다음 처치 때까지 처치 목록 아래에 그 플레이어의 이름과 사망이 표시됩니다. 그곳의 보스 전투는 DPS 미터를 유지합니다."
 }

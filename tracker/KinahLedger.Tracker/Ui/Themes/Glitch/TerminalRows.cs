@@ -169,7 +169,7 @@ static class TerminalRows
         {
             bool you = m.You;
             var cc = m.ClassColor;
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             _rankBox.Background = you ? Phos : null;
             _rank.Foreground = you ? Ground : PhosDim;
             _band.Visibility = you ? Visibility.Visible : Visibility.Collapsed;

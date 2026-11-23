@@ -163,7 +163,7 @@ sealed partial class HudRift
                 _expanded = c.Expanded;
                 _words.ColumnDefinitions[9].Width = new GridLength(c.Expanded ? DmgW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             _rank.Foreground = Leads ? White : RankInk;
             if (_iconCls != m.Class)
             {

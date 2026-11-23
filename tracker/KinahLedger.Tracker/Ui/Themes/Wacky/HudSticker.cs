@@ -825,7 +825,7 @@ sealed partial class HudSticker : WackyLook, IThemeCard
             _face.BorderBrush = m.You ? Wk.S(Pink) : K;
             _face.BorderThickness = new Thickness(m.You ? 3 : 2.5);
             _stampInk.Fill = Wk.S(m.You ? Pink : KC); _stampInk.Stroke = m.You ? K : PaperB;
-            _rank.Text = m.Rank.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             _rank.Foreground = m.You ? WhiteB : m.Rank == 1 ? YelB : PaperB;
             if (_cls != m.Class) { _cls = m.Class; _iconHost.Child = ThemeText.Icon(m.Class, 17, m.Name); }
             _name.Text = m.Name;

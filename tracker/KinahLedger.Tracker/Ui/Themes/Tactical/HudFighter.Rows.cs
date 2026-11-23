@@ -136,7 +136,7 @@ sealed partial class HudFighter
                 _root.ColumnDefinitions[5].Width = new GridLength(c.Expanded ? _critW : 0);
             }
             bool lead = m.Rank == 1 && !m.CpOnly;
-            _rank.Text = m.Rank.ToString("00", CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText("00");
             _rank.Foreground = lead || m.You ? Amber : PhosDim;
             _name.Text = m.Name;
             // the callsign in a light tint of its class: it reads on its own class's fill

@@ -189,7 +189,7 @@ sealed partial class HudHype
                 _words.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? _dmgW : 0);
                 _words.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? _critW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             bool leader = m.Rank == 1 && !m.CpOnly;
             if (leader != _leader) { _leader = leader; _rank.Foreground = leader ? Lime : White; _badgeArt.InvalidateVisual(); }
             if (m.Class != _cls)

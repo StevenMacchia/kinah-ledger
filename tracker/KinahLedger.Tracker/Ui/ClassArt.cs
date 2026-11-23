@@ -24,7 +24,7 @@ public static class ClassArt
     }
 
     /// <summary>The class's colour, the game's own (its party list's): Gladiator light blue, Templar blue, Assassin green, Ranger teal, Sorcerer purple, Spiritmaster magenta, Cleric gold, Chanter orange.</summary>
-    public static Color ColorOf(string? cls) => cls == PvpKill ? Color.FromRgb(0xE8, 0x6A, 0x5E) : cls == PvpAssist ? Color.FromRgb(0xE0, 0xA8, 0x4E) : Key(cls) switch
+    public static Color ColorOf(string? cls) => cls == PvpKill ? Color.FromRgb(0xE8, 0x6A, 0x5E) : cls == PvpAssist ? Color.FromRgb(0xE0, 0xA8, 0x4E) : cls == PvpDeath ? Color.FromRgb(0x9A, 0x7C, 0xC8) : Key(cls) switch
     {
         // the glyph colours of the game's own party list (Ocr/PartyFrame.Refs), so the Parser's colours are the game's
         "gladiator" => Color.FromRgb(0x7A, 0xC5, 0xD9),     // light blue
@@ -40,9 +40,13 @@ public static class ClassArt
 
     /// <summary>
     /// The PvP panel's rows (Parser/PvpKills.cs) are players whose class isn't known: their row is tinted by what it was, a
-    /// kill coral, an assist amber, under these keys (no class: the disc carries the name's initial, no class name is shown).
+    /// kill coral, an assist amber, your death at a player's hand (the "Killed by" row) a cold violet, a loss beside the warm
+    /// wins, under these keys (no class: the disc carries the name's initial, no class name is shown).
     /// </summary>
-    public const string PvpKill = "pvp:kill", PvpAssist = "pvp:assist";
+    public const string PvpKill = "pvp:kill", PvpAssist = "pvp:assist", PvpDeath = "pvp:death";
+
+    /// <summary>A row of the PvP panel: a kill, an assist or the "Killed by" row.</summary>
+    public static bool IsPvp(string? cls) => cls is PvpKill or PvpAssist or PvpDeath;
 
     /// <summary>The class's colour at <paramref name="alpha"/> (0 to 1), frozen: a meter bar behind text is the colour at about a third.</summary>
     public static SolidColorBrush Brush(string? cls, double alpha = 1)
@@ -79,10 +83,21 @@ public static class ClassArt
         }
         else
         {
+            if (cls == PvpDeath) name = KillerOf(name);   // the "Killed by" row's disc: the killer's initial
             var letter = name.Trim().Length > 0 ? name.Trim()[..1].ToUpperInvariant() : "·";
             disc.Child = new TextBlock { Text = letter, FontSize = size * 0.45, FontWeight = FontWeights.Bold, Foreground = Frozen(c), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         }
         return disc;
+    }
+
+    /// <summary>The killer's name in the PvP panel's "Killed by {0}" row name, in the language in use ("Nyx" from "Killed by Nyx").</summary>
+    public static string KillerOf(string shown)
+    {
+        var parts = L.F("Killed by {0}", "").Split('');
+        var s = shown.Trim();
+        if (parts.Length == 2 && s.StartsWith(parts[0], StringComparison.Ordinal) && s.EndsWith(parts[1], StringComparison.Ordinal) && s.Length > parts[0].Length + parts[1].Length)
+            return s[parts[0].Length..^parts[1].Length].Trim();
+        return s;
     }
 
     /// <summary>"Spiritmaster" from any spelling; the text as given when it isn't one of the eight.</summary>

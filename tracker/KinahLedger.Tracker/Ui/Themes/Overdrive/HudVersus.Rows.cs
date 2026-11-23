@@ -148,7 +148,7 @@ sealed partial class HudVersus
                 _words.ColumnDefinitions[8].Width = new GridLength(c.Expanded ? _dmgW : 0);
                 _words.ColumnDefinitions[9].Width = new GridLength(c.Expanded ? _critW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             _rank.Foreground = Leads ? White : m.You ? Cyan : Steel;
             _rank.FontSize = Leads ? 18 : 17;
             _rank.Effect = null;
