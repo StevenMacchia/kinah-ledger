@@ -924,7 +924,7 @@ sealed partial class HudHoloCard : WackyLook, IThemeCard
             uint v = Wk.Vivid(Wk.Hex(m.ClassColor));
             _orbFill.Fill = Wk.Rad(.4, .32, .75, (Wk.Shade(v, .5), 1, 0), (v, 1, .5), (Wk.Shade(v, -.5), 1, 1));
             _orbFill.Stroke = Wk.S(Wk.Shade(v, -.6));
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             if (_cls != m.Class) { _cls = m.Class; _icon.Child = ThemeText.Icon(m.Class, 15, m.Name); }
             _name.Text = m.Name; _name.Fg = m.You ? GoldB : WhiteB;
             _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;

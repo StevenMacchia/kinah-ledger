@@ -870,10 +870,10 @@ sealed partial class HudNeon : WackyLook, IThemeCard
         {
             uint rc = RankColor(m.Rank);
             _rank.Inlines.Clear();
-            _rank.Inlines.Add(new Run(m.Rank.ToString(System.Globalization.CultureInfo.InvariantCulture)) { FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Wk.S(rc) });
+            _rank.Inlines.Add(new Run(m.RankText()) { FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Wk.S(rc) });
             // deaths in the suffix's place, a red ✖ and the count ("4✖2"): on the row's own line, off the name's
             if (m.Deaths > 0) _rank.Inlines.Add(new Run("✖" + m.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture)) { FontSize = 9, FontWeight = FontWeights.Bold, Foreground = Wk.S(0xFF4545) });
-            else _rank.Inlines.Add(new Run(Suffix(m.Rank)) { FontSize = 9, FontWeight = FontWeights.Bold, Foreground = Wk.S(rc, .85) });
+            else if (!m.Died) _rank.Inlines.Add(new Run(Suffix(m.Rank)) { FontSize = 9, FontWeight = FontWeights.Bold, Foreground = Wk.S(rc, .85) });
             _band.Background = m.You ? Wk.Lin(0, 0, 1, 0, (Mag, .26, 0), (Mag, .06, 1)) : m.Rank % 2 == 0 ? Wk.S(0xFFFFFF, .035) : null;
             _edge.Background = m.You ? MagB : null;
             _you.Text = m.You ? "▶ " : ""; _you.Visibility = m.You ? Visibility.Visible : Visibility.Collapsed;

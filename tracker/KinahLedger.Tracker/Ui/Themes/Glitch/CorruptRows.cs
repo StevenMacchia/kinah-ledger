@@ -117,7 +117,7 @@ static class CorruptRows
             _code.Text = ClassCode(m.Class).ToLower(CultureInfo.InvariantCulture);
             _code.Foreground = Frozen(Color.FromRgb((byte)(cc.R * .45 + 255 * .55), (byte)(cc.G * .45 + 255 * .55), (byte)(cc.B * .45 + 255 * .55)));   // light: it sits on the bar in its own colour
             _edge.Background = Frozen(cc);
-            _rank.Text = m.Rank.ToString("00", CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText("00");
             _rankBox.Background = you ? Mag : null;
             _rank.Foreground = you ? White : Lilac;
             _you.Visibility = you ? Visibility.Visible : Visibility.Collapsed;

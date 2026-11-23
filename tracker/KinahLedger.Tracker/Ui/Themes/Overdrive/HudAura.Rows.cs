@@ -211,7 +211,7 @@ sealed partial class HudAura
                 _words.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? _dmgW : 0);
                 _words.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? _critW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             _rank.Foreground = lead ? Frozen(AuGoldHotC) : White;
             if (m.Class != _cls)
             {

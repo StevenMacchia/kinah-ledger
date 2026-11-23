@@ -174,7 +174,7 @@ sealed partial class HudDragon
             }
             bool lead = m is { Rank: 1, CpOnly: false, Pvp: false };
             if (lead != _lead) { _lead = lead; _crest.InvalidateVisual(); }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             _rank.Foreground = lead ? Frozen(Color.FromRgb(0x2A, 0x14, 0x02)) : White;
             _rank.Effect = null;
             if (m.Class != _cls)

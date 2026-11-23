@@ -217,7 +217,7 @@ sealed partial class HudScorebug
             if (_expanded != c.Expanded) { _expanded = c.Expanded; _top.ColumnDefinitions[2].Width = new GridLength(c.Expanded ? _moreW : 0); }
             _rc = m.You ? RedC : RankColor(m) == SlateC ? Color.FromRgb(0x2A, 0x2E, 0x38) : RankColor(m);
             _rankArt.InvalidateVisual();
-            _rankT.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rankT.Text = m.RankText();
             _rankT.Foreground = Frozen(RankColor(m) == SlateC || m.You ? Colors.White : InkC0);
             if (_cls != m.Class + "|" + m.Name) { _cls = m.Class + "|" + m.Name; _iconHost.Child = ThemeText.Icon(m.Class, 18, m.Name); }
             _name.Text = m.Name;

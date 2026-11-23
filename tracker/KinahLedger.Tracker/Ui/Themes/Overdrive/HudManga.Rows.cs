@@ -190,7 +190,7 @@ sealed partial class HudManga
                 _iconHost.Child = icon;
                 _ground.InvalidateVisual();
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             _name.Text = m.Name;
             _cp.Text = m.Cp;
             foreach (var mk in _marks) _line.Children.Remove(mk);

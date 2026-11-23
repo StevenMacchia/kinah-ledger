@@ -236,7 +236,7 @@ static class VhsRows
         {
             base.Set(m, c, fresh);
             bool you = m.You;
-            _rank.Text = m.Rank.ToString("00", CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText("00");
             _rankBox.Background = you ? White : Br(0xFFFFFF, .1);
             _rankBox.BorderBrush = you ? White : Br(0xFFFFFF, .4);
             _rank.Foreground = you ? Black : White;
@@ -314,7 +314,7 @@ static class VhsRows
         {
             base.Set(m, c, fresh);
             bool you = m.You;
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             _chip.Background = you ? White : Br(0x000000, .78);
             _chip.BorderBrush = you ? null : Br(0xFFFFFF, .25); _chip.BorderThickness = new Thickness(you ? 0 : 1);
             _rank.Foreground = you ? Black : White;

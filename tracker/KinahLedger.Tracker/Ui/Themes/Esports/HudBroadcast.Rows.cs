@@ -194,7 +194,7 @@ sealed partial class HudBroadcast
                 _words.ColumnDefinitions[9].Width = new GridLength(c.Expanded ? _dmgW : 0);
                 _words.ColumnDefinitions[10].Width = new GridLength(c.Expanded ? _critW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             // the leader's digit sits under the crown, in ink on the cyan
             bool lead = m.Rank == 1;
             _rank.Margin = new Thickness(lead ? 2 : 0, lead ? 9 : 0, 0, 0);

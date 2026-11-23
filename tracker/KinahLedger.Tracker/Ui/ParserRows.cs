@@ -229,6 +229,8 @@ public sealed partial class ParserRows : Grid
         var you = all.FirstOrDefault(f => f.You);
         bool pin = you != null && !visible.Contains(you);
         if (pin) visible = all.Take(max - 1).Append(you!).ToList();
+        // the PvP panel's "Killed by" row is its last, kept when the kills fill the rows
+        if (all.LastOrDefault() is { Class: ClassArt.PvpDeath } died && !visible.Contains(died)) visible = all.Take(max - 1).Append(died).ToList();
         double top = Math.Max(1, all.Select(e.Measure).DefaultIfEmpty(1).Max());   // the figure (boss damage or all targets), else Combat Power
         double topShare = Math.Max(0.0001, all.Select(e.Share).DefaultIfEmpty(1).Max());   // the bars' measure: the top member's share
         long topDps = e.TopDps(now)?.Id ?? long.MinValue, topHeals = e.TopHealer(now)?.Id ?? long.MinValue;
@@ -286,7 +288,8 @@ public sealed partial class ParserRows : Grid
             else if (Math.Abs(share - row.GhostBase) >= GhostStep) { GhostTrail(row, row.GhostBase, share); row.GhostBase = share; }
             // the rank: a changed one flips the chip (and glows, for the one who passed); the row glides to its new place
             int rankWas = row.Rank;
-            if (row.Rank != rank)
+            if (f.Class == ClassArt.PvpDeath) { row.Rank = rank; row.ChipText.Text = MeterMember.DiedMark; }   // the "Killed by" row has no rank
+            else if (row.Rank != rank)
             {
                 row.Rank = rank;
                 if (rankWas > 0 && (!fresh || was != null)) Flip(row, rankWas, rank); else row.ChipText.Text = rank.ToString(CultureInfo.InvariantCulture);
@@ -463,6 +466,7 @@ public sealed partial class ParserRows : Grid
     /// </summary>
     public static string NameOf(Fighter f)
     {
+        if (f.Class == ClassArt.PvpDeath) return L.F("Killed by {0}", f.Name);   // the PvP panel's row for your death at a player's hand
         if (f.Name.Length > 0) return f.Name;
         if (!f.You) return L.T("Unnamed");
         string n = "";

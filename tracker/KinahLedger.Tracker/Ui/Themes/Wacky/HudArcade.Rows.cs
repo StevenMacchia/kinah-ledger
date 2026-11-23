@@ -174,7 +174,7 @@ sealed partial class HudArcade
             {
                 _rank = m.Rank;
                 // the rank word in LED letters (a longer one a dot smaller, to keep the column); "1위" as a text in Korean
-                var word = RankWord(m.Rank);
+                var word = m.Died ? "X" : RankWord(m.Rank);
                 FrameworkElement rw = Spells(word) ? Word(word, word.Length > 3 ? 1.2 : 1.5, tone, .38) : RankNative(m.Rank, tone);
                 _rankHost.Child = rw;
                 _crown.Visibility = m.Rank == 1 ? Visibility.Visible : Visibility.Collapsed;

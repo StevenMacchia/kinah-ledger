@@ -105,7 +105,7 @@ sealed partial class HudModernLine
             _expanded = c.Expanded;
             _text.ColumnDefinitions[6].Width = new GridLength(c.Expanded ? DmgW : 0);
             _text.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? CritW : 0);
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             if (_cls != m.Class + "|" + m.Name)
             {
                 _cls = m.Class + "|" + m.Name;

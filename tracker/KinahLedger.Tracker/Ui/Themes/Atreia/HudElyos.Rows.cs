@@ -186,7 +186,7 @@ sealed partial class HudElyos
                 _words.ColumnDefinitions[7].Width = new GridLength(c.Expanded ? _critW : 0);
             }
             // the rank in Roman numerals, a smaller size for a long one so it keeps its column
-            var rk = Roman(m.Rank);
+            var rk = m.Died ? MeterMember.DiedMark : Roman(m.Rank);
             if (_rank.Text != rk)
             {
                 _rank.Text = rk;

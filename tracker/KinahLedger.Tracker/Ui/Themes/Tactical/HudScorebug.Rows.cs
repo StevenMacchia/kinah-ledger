@@ -293,7 +293,7 @@ sealed partial class HudScorebug
             _ground.BorderBrush = Frozen(Tac.A(RedC, .8)); _ground.BorderThickness = new Thickness(0, m.You ? 1 : 0, 0, m.You ? 1 : 0);
             _rc = RankColor(m); if (_rc == SlateC) _rc = Color.FromRgb(0x23, 0x27, 0x2F);
             _rankArt.InvalidateVisual();
-            _rankT.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rankT.Text = m.RankText();
             _rankT.Foreground = Frozen(RankColor(m) == SlateC || m.You ? Colors.White : InkC0);
             _stripe.Background = Tac.Grad(true, (Tac.Mix(col, Colors.White, .3), 0), (col, 1));
             _stripe.Effect = Glow(6, 0, .8, col);

@@ -95,7 +95,7 @@ public sealed partial class ParserRows
         System.Windows.Documents.Typography.SetNumeralAlignment(cp, FontNumeralAlignment.Tabular);
         var cpWord = new TextBlock { Text = L.T("CP"), FontSize = podium ? 8 : 8, FontWeight = FontWeights.Bold, Foreground = PK.C(podium ? Color.FromRgb(0x6A, 0x70, 0x84) : Ink, podium ? 1 : 0.5), VerticalAlignment = VerticalAlignment.Center };
         cpWord.SetBinding(VisibilityProperty, new Binding(nameof(Visibility)) { Source = cp });
-        if (f.Class is ClassArt.PvpKill or ClassArt.PvpAssist) cpWord.Text = "";   // the PvP panel's line is who killed, not CP
+        if (ClassArt.IsPvp(f.Class)) cpWord.Text = "";   // the PvP panel's line is who killed, not CP
         var cpPair = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { cpWord, cp } };
         if (!podium) { cp.Effect = Lift(2, 0.8); cpWord.Effect = Lift(2, 0.8); }
         Border? you = null;

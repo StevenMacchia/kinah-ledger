@@ -131,7 +131,7 @@ sealed partial class HudModernGlass
                 _expanded = c.Expanded;
                 _root.ColumnDefinitions[9].Width = new GridLength(c.Expanded ? DmgW : 0);
             }
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             if (_iconCls != m.Class)
             {
                 _iconCls = m.Class;

@@ -164,7 +164,7 @@ sealed partial class HudFinals
             _lead = lead;
             // the tight shade only where the words sit on gold (the graphite bars are dark enough without it)
             if (lead != (_words.Effect != null)) _words.Effect = lead ? Shade() : null;
-            _rank.Text = m.Rank.ToString(CultureInfo.InvariantCulture);
+            _rank.Text = m.RankText();
             // the rank always shows: the leader's "1" in pale gold at the foot of the column, the trophy standing over it
             _rank.VerticalAlignment = lead ? VerticalAlignment.Bottom : VerticalAlignment.Center;
             _rank.Margin = lead ? new Thickness(0, 0, 0, .5) : new Thickness(0);

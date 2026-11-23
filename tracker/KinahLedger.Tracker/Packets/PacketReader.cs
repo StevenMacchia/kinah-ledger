@@ -335,8 +335,9 @@ public sealed class PacketReader : IDisposable, IBossFeed
             return;
         }
         Log($"{Local(f.At)}  " + (f.Kind == FightKind.RankPoints ? $"Rank Points {(f.Delta == 0 ? "now" : Signed(f.Delta))} · {f.Total:N0}"
-            : f.Flags.HasFlag(FightFlags.VictimMe) ? $"died{(f.KillerName.Length > 0 ? " to " + f.KillerName : "")}"
-            : $"{(f.Flags.HasFlag(FightFlags.Mine) ? "killed" : "a kill naming no killer:")} {(f.Flags.HasFlag(FightFlags.VictimPlayer) ? "the player " + f.VictimName : f.Flags.HasFlag(FightFlags.VictimMonster) ? $"monster {f.MonsterId}" : "something")}"));
+            : f.Flags.HasFlag(FightFlags.VictimMe) ? $"died{(f.KillerName.Length > 0 ? " to " + f.KillerName : "")}{CpNote(f.KillerCp)}"
+            : $"{(f.Flags.HasFlag(FightFlags.Mine) ? "killed" : "a kill naming no killer:")} {(f.Flags.HasFlag(FightFlags.VictimPlayer) ? "the player " + f.VictimName + CpNote(f.VictimCp) : f.Flags.HasFlag(FightFlags.VictimMonster) ? $"monster {f.MonsterId}" : "something")}"));
+        static string CpNote(long cp) => cp > 0 ? $" (CP {cp:N0})" : "";
     }
 
     /// <summary>
