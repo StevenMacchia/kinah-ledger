@@ -850,6 +850,31 @@
    "bound": true,
    "url": "https://metabot.gg/en/aion-2/items/pokos-skin-bundle-bound",
    "note": "2026-11-11: a reward chest of 38 skins that any gathering node can give; counted as a rare find on Gathering (Data/GatheringCatalog.cs Finds)"
+  },
+  {
+   "id": null,
+   "name": "Creepy Night Cat Wings (Bound)",
+   "grade": "Special",
+   "tradable": false,
+   "category": "Wings Unlocking Item",
+   "icon": "https://metabot.gg/web/aion2/items/icon_wingc_008.webp",
+   "iconSource": "MetaBot",
+   "metabotCategory": "Wings Unlocking Item",
+   "bound": true,
+   "url": "https://metabot.gg/en/aion-2/items/creepy-night-cat-wings-bound"
+  },
+  {
+   "id": null,
+   "name": "Sync Stone (Unique) (Bound)",
+   "grade": "Unique",
+   "tradable": false,
+   "category": "Special Material",
+   "icon": "https://metabot.gg/web/aion2/items/icon_item_enchant_soulselect_a_001.webp",
+   "iconSource": "MetaBot",
+   "metabotCategory": null,
+   "bound": true,
+   "url": "https://metabot.gg/en/aion-2/items/sync-stone-unique-bound",
+   "note": "2026-11-18: Nov 11 patch, up to 3 a week from Way of the Transcended Steps 1-3. MetaBot page has no Grade/Category card: grade from the name, category from its Sync Stone Fragment (Unique) sibling in tw-items.json."
   }
  ]
 }
