@@ -64,7 +64,8 @@ public sealed class PvpKills
     /// <summary>Where the fights are: "Abyss" or the arena's name (set by the session).</summary>
     public string Place { get; set; } = "Abyss";
     /// <summary>
-    /// A player's Combat Power by their id and name when the tracker knows it, else 0 (asked when a kill or death is added).
+    /// A player's Combat Power by their id and name when the tracker knows it, else 0 (asked when a kill or death is added and
+    /// the game's own kill didn't carry it: <see cref="FightEvent.VictimCp"/>, <see cref="FightEvent.KillerCp"/>).
     /// Never a guess: an unknown CP shows nothing.
     /// </summary>
     public Func<uint, string, long>? CpOf { get; set; }
@@ -140,12 +141,13 @@ public sealed class PvpKills
         if (killer.Length == 0) return false;
         if (_death is { } was && Math.Abs((e.At - was.At).TotalSeconds) < SameDeathSeconds) return false;
         var seq = ++_seq;
-        _death = new PvpKill(seq, e.At, e.KillerId, killer, false, "", FightWith(e.KillerId, killer, e.At, seq, "died"), Cp(e.KillerId, killer), Death: true);
+        _death = new PvpKill(seq, e.At, e.KillerId, killer, false, "", FightWith(e.KillerId, killer, e.At, seq, "died"), Cp(e.KillerCp, e.KillerId, killer), Death: true);
         return true;
     }
 
-    long Cp(uint id, string name)
+    long Cp(long carried, uint id, string name)
     {
+        if (carried > 0) return carried;
         try { return Math.Max(0, CpOf?.Invoke(id, name) ?? 0); } catch (Exception) { return 0; }
     }
 
@@ -177,7 +179,7 @@ public sealed class PvpKills
         var seq = ++_seq;
         var fight = FightWith(e.VictimId, e.VictimName.Trim(), e.At, seq, "kill");
         if (!assist) { fight.YourKills = 1; fight.PlayerKills = 1; }
-        _last.Insert(0, new PvpKill(seq, e.At, e.VictimId, e.VictimName.Trim(), assist, assist ? e.KillerName.Trim() : "", fight, Cp(e.VictimId, e.VictimName.Trim())));
+        _last.Insert(0, new PvpKill(seq, e.At, e.VictimId, e.VictimName.Trim(), assist, assist ? e.KillerName.Trim() : "", fight, Cp(e.VictimCp, e.VictimId, e.VictimName.Trim())));
         if (_last.Count > Kept) _last.RemoveRange(Kept, _last.Count - Kept);
         _death = null;   // the "Killed by" row stays until your next kill or assist
     }

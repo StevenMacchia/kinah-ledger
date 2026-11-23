@@ -51,11 +51,63 @@ public static partial class WpfApp
         return p;
     }
 
+    /// <summary>
+    /// ui-shot --parser pvp with KL_PVP_REPLAY=a.pcapng,b.pcapng and KL_PVP_AT=13:23:30,13:40:00 (local times): the panel as a
+    /// recording's own fight events, through the decoder and the panel's rules, left it at each of those times (pvp/ui-pvp-replay-
+    /// HHmmss-LOOK.png in the Parser's own look and Modern Glass, and replay.txt with each row's name, word and Combat Power).
+    /// Needs the decoder (klnet.dll beside the exe).
+    /// </summary>
+    static bool ShotPvpReplay(string sub)
+    {
+        var files = (Environment.GetEnvironmentVariable("KL_PVP_REPLAY") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (files.Length == 0) return false;
+        var ev = PacketTests.Decode(files).Select(x => x.Ev).OfType<FightEvent>().OrderBy(f => f.At).ToList();
+        var day = ev.Count > 0 ? ev[0].At.ToLocalTime().Date : DateTime.Today;
+        var ats = (Environment.GetEnvironmentVariable("KL_PVP_AT") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => TimeSpan.TryParse(s, out var ts) ? (DateTime?)DateTime.SpecifyKind(day + ts, DateTimeKind.Local).ToUniversalTime() : null).OfType<DateTime>().ToList();
+        if (ats.Count == 0 && ev.Count > 0) ats.Add(ev[^1].At.AddSeconds(1));
+        var lines = new List<string> { $"{files.Length} files, {ev.Count} fight events (decoder {NativeDecoder.Version})" };
+        // every kill of a player's, death at a player's hand and other-faction death by another's hand, with the CP it carried
+        foreach (var f in ev.Where(f => f.Kind == FightKind.Kill && (f.Flags.HasFlag(FightFlags.VictimMe) ? f.KillerName.Length > 0
+            : f.Flags.HasFlag(FightFlags.VictimPlayer) && (f.Flags.HasFlag(FightFlags.Mine) || f.Flags.HasFlag(FightFlags.OtherKiller) && f.Flags.HasFlag(FightFlags.VictimEnemy)))))
+            lines.Add(f.Flags.HasFlag(FightFlags.VictimMe) ? $"  {f.At.ToLocalTime():MM-dd HH:mm:ss} died to {f.KillerName}, cp {f.KillerCp:N0}"
+                : $"  {f.At.ToLocalTime():MM-dd HH:mm:ss} {(f.Flags.HasFlag(FightFlags.Mine) ? "killed" : $"{(f.KillerName.Length > 0 ? f.KillerName : "a monster or object")} killed")} {f.VictimName}, cp {f.VictimCp:N0}");
+        bool exp0 = ParserRows.ExpandedPref, still0 = Motion.Still;
+        double width0 = HudStackLook.FightWidth;
+        try
+        {
+            Motion.Still = true;
+            foreach (var at in ats)
+            {
+                var p = new PvpKills { Self = () => ("", ""), Place = "Abyss" };
+                foreach (var f in ev.TakeWhile(f => f.At <= at)) p.Take(f);
+                var board = p.Board(at);
+                string stamp = at.ToLocalTime().ToString("HHmmss");
+                lines.Add($"at {at.ToLocalTime():HH:mm:ss}:");
+                foreach (var k in board.Pvp ?? new List<PvpKill>())
+                    lines.Add($"  {k.At.ToLocalTime():HH:mm:ss} {(k.Death ? "Killed by " : "")}{k.Name}  {Encounter.PvpWord(k)}  damage {k.Damage:N0}  \"{Encounter.PvpBy(k)}\"  cp {k.Cp:N0}");
+                foreach (var look in new[] { ParserPrefs.StandardLook, HudThemes.ModernGlass })
+                    foreach (var expanded in new[] { true, false })
+                    {
+                        ParserRows.ExpandedPref = expanded; HudStackLook.FightWidth = width0 + (expanded ? 70 : 0);
+                        var name = $"ui-pvp-replay-{stamp}-{look}{(expanded ? "" : "-compact")}.png";
+                        Save(PvpFrame(board, at, look, sub, name), Path.Combine(sub, name), 0, ShotGround);
+                    }
+            }
+        }
+        finally { Motion.Still = still0; ParserRows.ExpandedPref = exp0; HudStackLook.FightWidth = width0; }
+        File.WriteAllLines(Path.Combine(sub, "replay.txt"), lines);
+        foreach (var l in lines) Console.WriteLine(l);
+        Console.WriteLine($"wrote {Path.GetFullPath(sub)}");
+        return true;
+    }
+
     static void ShotPvp(string dir)
     {
         var now = new DateTime(2026, 11, 20, 21, 30, 0, DateTimeKind.Utc);
         string sub = Path.Combine(dir, "pvp");
         Directory.CreateDirectory(sub);
+        if (ShotPvpReplay(sub)) return;
         try { File.Delete(Path.Combine(sub, "spill.txt")); } catch (IOException) { }
         var board = PvpSample(now).Board(now);
         var empty = PvpKills.BoardOf(Array.Empty<PvpKill>(), "Abyss", now);

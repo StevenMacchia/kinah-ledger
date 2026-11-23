@@ -31,9 +31,10 @@ public enum FightFlags
 /// A fight event: a kill the player is in (their kill, their death, or one that named no killer), a Rank Points change, or
 /// a hit of the player's on an enemy player (Hit: VictimId and VictimName the target, KillerId the player, Delta the damage).
 /// MonsterId says which monster died (0 for a player; a Hit's skill); names are a player victim's and the killer's.
+/// A kill's VictimCp and KillerCp (decoder version 16) are those players' Combat Power when the game showed it, else 0.
 /// </summary>
 public sealed record FightEvent(DateTime At, FightKind Kind, FightFlags Flags, uint VictimId, uint KillerId, uint MonsterId,
-    long Delta, long Total, string VictimName, string KillerName);
+    long Delta, long Total, string VictimName, string KillerName, long VictimCp = 0, long KillerCp = 0);
 
 /// <summary>
 /// Turns the game's fight events into the player's kills and deaths (Steven, 2026-11-13: "count abyss pvp kills vs. mob
