@@ -134,5 +134,20 @@ static class PvpKillsTests
         var lb = lone.Board(t);
         check(lb is { Waiting: false, HasDamage: true } && lb.Roster is [{ Name: "Orin", Class: Ui.ClassArt.PvpDeath }] && Encounter.PvpBy(lb.PvpOf(lb.Roster[0])!) == "" && Encounter.PvpFigure(lb.PvpOf(lb.Roster[0])!) == "–",
             "...a death before any kill: the panel is its Killed by row alone (no CP known: nothing; no hit of yours: –)");
+
+        // the game's own kill carries the CP (decoder 16): a kill, an assist that waited for your hit, your death; CpOf unset
+        var g = new PvpKills { Self = () => ("", "Templar") };
+        g.Take(Hit(t, 701, "Dempt", 12010000, 20_000));
+        g.Take(Mine(t.AddSeconds(1), 701, "Dempt") with { VictimCp = 205_386 });
+        g.Take(Others(t.AddSeconds(10), 702, "Ellis", "Tilly") with { VictimCp = 268_795 });   // the death first, your hit just after
+        g.Take(Hit(t.AddSeconds(10.3), 702, "Ellis", 12010000, 9_000));
+        g.Take(Hit(t.AddSeconds(20), 703, "Liklis", 12010000, 9_000));
+        g.Take(new FightEvent(t.AddSeconds(21), FightKind.Kill, FightFlags.VictimMe | FightFlags.VictimPlayer, 1, 703, 0, 0, 0, "", "Liklis", KillerCp: 254_422));
+        g.Take(Mine(t.AddSeconds(30), 704, "Cron") with { VictimCp = 0 });
+        check(g.Last.Count == 3 && g.Last[2] is { Name: "Dempt", Cp: 205_386 } && g.Last[1] is { Name: "Ellis", Assist: true, Cp: 268_795 } && g.Last[0] is { Name: "Cron", Cp: 0 }
+            && Encounter.PvpBy(g.Last[1]) == "CP 268.8K · by Tilly",
+            $"...the CP the game's kill carries: a kill ({g.Last.ElementAtOrDefault(2)?.Cp:N0}), an assist that waited for your hit ({g.Last.ElementAtOrDefault(1)?.Cp:N0}), none when it carried none");
+        g.Take(new FightEvent(t.AddSeconds(40), FightKind.Kill, FightFlags.VictimMe | FightFlags.VictimPlayer, 1, 705, 0, 0, 0, "", "Yocahu", KillerCp: 209_350));
+        check(g.LastDeath is { Name: "Yocahu", Cp: 209_350 } && Encounter.PvpBy(g.LastDeath) == "CP 209.4K", $"...and your killer's ({g.LastDeath?.Cp:N0})");
     }
 }

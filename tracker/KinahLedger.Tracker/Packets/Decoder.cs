@@ -424,8 +424,11 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         // doesn't know is passed over, so the events after it still come
         do { if (NextEventN(_h, &e) != 1) return null; } while (e.Kind is < 1 or > 3 || (e.Kind == 3 && Version < 12));
         static string Text(byte* b) { int n = 0; while (n < 32 && b[n] != 0) n++; return System.Text.Encoding.UTF8.GetString(b, n); }
+        // version 16: a kill carries the victim's and the killer's Combat Power (0 unknown) where the Rank Points carry their totals
+        static long Cp(long v) => v is > 0 and < 100_000_000 ? v : 0;
+        bool cps = e.Kind == 1 && Version >= 16;
         return new FightEvent(new DateTime(e.AtUtcTicks, DateTimeKind.Utc), (FightKind)e.Kind, (FightFlags)e.Flags, e.VictimId, e.KillerId, e.MonsterId,
-            e.Delta, e.Total, Text(e.VictimName), Text(e.KillerName));
+            cps ? 0 : e.Delta, cps ? 0 : e.Total, Text(e.VictimName), Text(e.KillerName), cps ? Cp(e.Delta) : 0, cps ? Cp(e.Total) : 0);
     }
     // a dll that says 8 or more but was built without the inventory export (the interface numbers are shared between
     // branches): asked once, then never again, and the inventory stays unknown
