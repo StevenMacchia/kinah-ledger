@@ -850,6 +850,97 @@
    "bound": true,
    "url": "https://metabot.gg/en/aion-2/items/pokos-skin-bundle-bound",
    "note": "2026-11-11: a reward chest of 38 skins that any gathering node can give; counted as a rare find on Gathering (Data/GatheringCatalog.cs Finds)"
+  },
+  {
+   "id": null,
+   "name": "Growth Pet Chest (Bound)",
+   "grade": "Common",
+   "tradable": false,
+   "category": "Reward Chest",
+   "icon": "https://metabot.gg/web/aion2/items/icon_item_box_bm_vehicle_001.webp",
+   "iconSource": "MetaBot",
+   "metabotCategory": "Reward Chest",
+   "bound": true,
+   "url": "https://metabot.gg/en/aion-2/items/growth-pet-chest-bound",
+   "note": "2026-11-25: Daeva Pass reward; MetaBot page has grade, category and icon only"
+  },
+  {
+   "id": null,
+   "name": "Skin Chest (10 times) (Bound)",
+   "grade": "Special",
+   "tradable": false,
+   "category": "Reward Chest",
+   "icon": "https://metabot.gg/web/aion2/items/icon_item_skin_package_all_a_001.webp",
+   "iconSource": "MetaBot",
+   "metabotCategory": "Reward Chest",
+   "bound": true,
+   "url": "https://metabot.gg/en/aion-2/items/skin-chest-10-times-bound",
+   "note": "2026-11-25: Daeva Pass reward; MetaBot page has grade, category and icon only"
+  },
+  {
+   "id": null,
+   "name": "Sync Stone (Unique) (Bound)",
+   "grade": "Unique",
+   "tradable": false,
+   "category": "Special Substance Morph Material",
+   "icon": "https://metabot.gg/web/aion2/items/icon_item_enchant_soulselect_a_001.webp",
+   "iconSource": "MetaBot",
+   "metabotCategory": "Special Substance Morph Material",
+   "bound": true,
+   "url": "https://metabot.gg/en/aion-2/items/sync-stone-unique-bound",
+   "note": "2026-11-25: Transcendence season mission and event morph reward; MetaBot page has icon only, grade from the name, category from Gear Change Voucher: Ludra (Bound)"
+  },
+  {
+   "id": null,
+   "name": "Customization Voucher (Bound)",
+   "grade": "Special",
+   "tradable": false,
+   "category": "Skin Dye Premium",
+   "icon": "https://metabot.gg/web/aion2/items/icon_item_currency_skindyepremium.webp",
+   "iconSource": "MetaBot",
+   "metabotCategory": "Skin Dye Premium",
+   "bound": true,
+   "url": "https://metabot.gg/en/aion-2/items/customization-voucher-bound",
+   "note": "2026-11-25: Daeva Pass reward; MetaBot page has grade, category and icon only"
+  },
+  {
+   "id": null,
+   "name": "Appearance Change Voucher (7 Days) (Bound)",
+   "grade": "Common",
+   "tradable": false,
+   "category": "Customization",
+   "icon": "https://metabot.gg/web/aion2/items/icon_item_currency_ticket_customize_001.webp",
+   "iconSource": "MetaBot",
+   "metabotCategory": "Customization",
+   "bound": true,
+   "url": "https://metabot.gg/en/aion-2/items/appearance-change-voucher-7-days-bound",
+   "note": "2026-11-25: Daeva Pass reward; MetaBot page has grade, category and icon only"
+  },
+  {
+   "id": null,
+   "name": "Wrathful Material Selection Chest (Bound)",
+   "grade": "Unique",
+   "tradable": false,
+   "category": "Reward Chest",
+   "icon": "https://metabot.gg/web/aion2/items/icon_item_currency_box_normal_unique_02.webp",
+   "iconSource": "MetaBot",
+   "metabotCategory": "Reward Chest",
+   "bound": true,
+   "url": null,
+   "note": "not on MetaBot on 2026-11-25 (Corroded Decontamination Facility event morph reward); grade, category and icon taken from Abyssal Forge: Weapon Selection Chest (Bound)"
+  },
+  {
+   "id": null,
+   "name": "Corroded Decontamination Facility Coin",
+   "grade": "Common",
+   "tradable": false,
+   "category": "Event",
+   "icon": "https://assets.playnccdn.com/static-aion2-gamedata/resources/Icon_QuestCoin3.png",
+   "iconSource": "NC CDN",
+   "metabotCategory": "Coin Event10",
+   "bound": true,
+   "url": null,
+   "note": "not on MetaBot on 2026-11-25 (event coin, removed from the inventory at the weekly reset); grade, category and icon taken from Alturadon Coin (Bound)"
   }
  ]
 }
