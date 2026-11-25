@@ -5368,6 +5368,13 @@ options: --process aion[,other]");
                 var bw = new SessionEngine(items); bw.SetZone("Ellun River Midstream"); bw.Apply(new KinahChanged(at0, 1_245, true));
                 Check("a kill's bound Kina in the Abyss is Kinah, by zone; a quest's isn't, nor bound Kina out of it",
                     $"{bk.Kinah} {bk.AbyssBoundKinah} {bk.KinahBound} {bk.ZoneSnapshot()["Abyss"].Kinah} {bk.Kills} | {bw.Kinah} {bw.KinahBound}", "1625 1625 8000 1625 2 | 0 1245");
+                // out of the Abyss a kill's bound Kina (the session marks it KillPay: a kill beside it) is its Kinah too, by zone; a
+                // quest's bigger sum isn't (Steven, 2026-11-25 10:45, Crimson Isle: "Acquired 284 Kina (Bound)" after each kill, Kinah/h still)
+                var bp = new SessionEngine(items); bp.SetZone("Crimson Isle");
+                bp.Apply(new KinahChanged(at0, 284, true) { KillPay = true }); bp.Apply(new KinahChanged(at0.AddSeconds(2), 161, true) { KillPay = true });
+                bp.Apply(new KinahChanged(at0.AddSeconds(4), 8_000, true) { KillPay = true }); bp.Apply(new KinahChanged(at0.AddSeconds(6), 500, true));
+                Check("a kill's bound Kina out of the Abyss is Kinah, by zone; a quest's and one with no kill beside it aren't",
+                    $"{bp.Kinah} {bp.KillBoundKinah} {bp.AbyssBoundKinah} {bp.KinahBound} {bp.ZoneSnapshot()["Crimson Isle"].Kinah}", "445 445 0 8500 445");
                 Check("Abyss Points count only in an Abyss zone, by zone, and carry over", $"{ae.AbyssPoints} | {ae.ZoneSnapshot().GetValueOrDefault("Altam")?.AbyssPoints} {ae.ZoneSnapshot().GetValueOrDefault("Chaotic Upper Reshanta")?.AbyssPoints} | {back.AbyssPoints} | {TodayLoot.Farm(ae, items, "Chaotic Upper Reshanta").Abyss}", "400 | 0 400 | 400 | 400");
                 // the farming clock runs on the kills the game's messages tell and the bound Kina they pay: Steven's 2026-11-21
                 // 12:51:18.7 to 12:52:41.5 in Destroyed Temple Site (seconds from its start), 20 kills and 18 bound Kina, no chat

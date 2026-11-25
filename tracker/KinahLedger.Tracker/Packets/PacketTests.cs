@@ -171,6 +171,25 @@ public static class PacketTests
             s.DrainPacketsForTest();
             // (a kill's bound Kina in the Abyss is its Kinah since 0.10.71: SessionEngine.IsAbyssKillKina)
             Check(s.Engine.AbyssBoundKinah == 278 && s.Engine.KinahBound == 0 && s.Engine.Kinah == 1_394 + 278 && s.Engine.AbyssPoints == 12, $"...bound Kinah +{s.Engine.AbyssBoundKinah} (the kill's Kinah: {s.Engine.Kinah:N0}) and Abyss Points +{s.Engine.AbyssPoints} from the game's traffic, the chat's misread 7 left out");
+            {
+                // out of the Abyss too, where since 2026-11-23 nearly every kill pays its Kina bound (Steven, 2026-11-25 10:45, Crimson
+                // Isle: "Acquired 284 Kina (Bound)." after each kill and Kinah/h stood still): a kill's bound Kina is its Kinah, the
+                // zone's too; a quest's 50,000 with no kill beside it, and a small sum a minute after the last kill, stay set aside
+                var wr = new PacketReader(); wr.ReadingForTest();
+                var ws = new TrackerSession(null, settings, items, "Test") { Packets = wr };
+                ws.Engine.SetZone("Crimson Isle");
+                var w0 = DateTime.UtcNow.AddMinutes(-3);
+                wr.AmountForTest(CurrencyKind.BoundKinah, 57_000, w0);
+                ws.CommitForTest(new CurrencyGained(w0.AddSeconds(1), "Fera Soul Points", 1) { Via = "chat" });
+                wr.AmountForTest(CurrencyKind.BoundKinah, 57_284, w0.AddSeconds(1.2));
+                ws.CommitForTest(new CurrencyGained(w0.AddSeconds(5), "Fera Soul Points", 1) { Via = "chat" });
+                wr.AmountForTest(CurrencyKind.BoundKinah, 57_445, w0.AddSeconds(5.1));
+                ws.DrainPacketsForTest();
+                wr.AmountForTest(CurrencyKind.BoundKinah, 107_445, w0.AddSeconds(70)); ws.DrainPacketsForTest();
+                wr.AmountForTest(CurrencyKind.BoundKinah, 107_945, w0.AddSeconds(90)); ws.DrainPacketsForTest();
+                Check(ws.Engine.Kinah == 445 && ws.Engine.KillBoundKinah == 445 && ws.Engine.ZoneSnapshot().GetValueOrDefault("Crimson Isle")?.Kinah == 445,
+                    $"...a kill's bound Kinah out of the Abyss is its Kinah: {ws.Engine.Kinah:N0} (284 + 161), zone {ws.Engine.ZoneSnapshot().GetValueOrDefault("Crimson Isle")?.Kinah:N0}, a quest's 50,000 and a lone 500 left out");
+            }
             // a sale (an NPC in town, nothing killed around it) and a rise in a base are no pickups
             s.Engine.SetZone("Western Cantas Valley");
             reader.AmountForTest(CurrencyKind.Kinah, 30_001_594, t0.AddSeconds(50)); s.DrainPacketsForTest();
@@ -263,7 +282,7 @@ public static class PacketTests
                 rq.AmountForTest(CurrencyKind.BoundKinah, 135_721, qt.AddSeconds(-1));
                 rq.AmountForTest(CurrencyKind.BoundKinah, 185_721, qt.AddSeconds(-0.2)); rq.AmountForTest(CurrencyKind.AbyssPoints, 15_942, qt.AddSeconds(-0.2));
                 q.DrainPacketsForTest();
-                Check(q.Engine.KinahBound == 300, $"...a quest's 50,000 bound Kinah and 2,500 Abyss Points among kills is more than a kill pays: bound Kinah +{q.Engine.KinahBound:N0} (the kill's 300)");
+                Check(q.Engine.KinahBound == 0 && q.Engine.Kinah == 300 && q.Engine.KillBoundKinah == 300, $"...a quest's 50,000 bound Kinah and 2,500 Abyss Points among kills is more than a kill pays: Kinah +{q.Engine.Kinah:N0}, set aside {q.Engine.KinahBound:N0} (the kill's 300 is its Kinah since 1.0.63)");
             }
             // the chat's line for one item of an update is the whole update's (2026-11-20 11:34:49, Gartua's drop): Refining Stone
             // and Artisan's Refining Stone came in one update, no kill of the player's around it (a world boss), the chat's line

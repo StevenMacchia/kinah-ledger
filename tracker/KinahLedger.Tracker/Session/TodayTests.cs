@@ -80,6 +80,13 @@ public static class TodayTests
             var t3 = t2.AddMinutes(2);
             s.LoadingSeen(t3); s.ApplyZone("Western Cantas Valley", t3.AddSeconds(4));
             Check("...after a loading screen the move is at once", $"{s.ZoneView.Totals().Kinah} {s.Place}", "0 Western Cantas Valley");
+            // a teleport in the open world shows no loading screen: Kinah paid out of the Market just before the new zone's read, at once
+            var tf = t3.AddMinutes(1); s.Count(new KinahChanged(tf, 250, false));
+            s.FeePaid(tf.AddSeconds(5)); s.ApplyZone("Eastern Cantas Valley", tf.AddSeconds(9));
+            Check("...after a teleport's fee the move is at once", $"{s.ZoneView.Totals().Kinah} {s.Place}", "0 Eastern Cantas Valley");
+            s.ApplyZone("Western Cantas Valley", tf.AddSeconds(9 + TrackerSession.FeeMoveSeconds + 30));
+            Check("...but a zone read long after the fee waits its minute as ever", $"{s.Place}", "Eastern Cantas Valley");
+            s.ApplyZone("Western Cantas Valley", tf.AddSeconds(9 + TrackerSession.FeeMoveSeconds + 30 + TrackerSession.SteadySeconds + 1));
             // an expedition's areas are one place: its own zone view, never started over between its rooms
             s.ApplyZone("Path of Atonement", t3.AddMinutes(1)); var inRun = s.ZoneView;
             s.ApplyZone("Fire Corridor", t3.AddMinutes(3)); s.ApplyZone("Mirror Altar", t3.AddMinutes(3.5));

@@ -700,6 +700,14 @@ public sealed partial class TrackerSession
     public static string? PlaceOf(string? zone) => zone == null || zone == SessionEngine.UnknownZone ? zone : ZoneLocator.RunName(zone);
     /// <summary>A loading screen was up (the scene reader, or replay's "scene Loading" note): a zone read after it is a real move.</summary>
     internal void LoadingSeen(DateTime at) { if (at > _loadedAt) _loadedAt = at; }
+    /// <summary>
+    /// Kinah paid out of the Market (the game's messages): a teleport's fee, most often. A teleport in the open world shows no
+    /// loading screen, so a new zone read in the <see cref="FeeMoveSeconds"/> after the fee is the move it paid for, made at once
+    /// (Steven, 2026-11-25: the "here" figures stayed on the old zone a minute after each teleport, 10:13:55 180,000 Kinah).
+    /// </summary>
+    internal void FeePaid(DateTime at) { if (at > _feeAt) _feeAt = at; }
+    DateTime _feeAt = DateTime.MinValue;
+    internal const double FeeMoveSeconds = 30;
 
     void SteadyDue(string? zone, DateTime now)
     {
@@ -716,6 +724,7 @@ public sealed partial class TrackerSession
                 _placeNext = null; _moveZone = null; _moveAll = null;
             }
             else if ((now - _loadedAt).TotalSeconds is >= 0 and <= 30) MoveTo(place, zone!, now, "after a loading screen");
+            else if ((now - _feeAt).TotalSeconds is >= -2 and <= FeeMoveSeconds) MoveTo(place, zone!, now, "after a teleport's fee");
             else if (ZoneLocator.KindOf(zone) != null || ZoneLocator.KindOf(_place) != null) MoveTo(place, zone!, now, "an instance's edge");
             else if (_placeNext?.Place != place)
             {
@@ -1291,6 +1300,7 @@ public sealed partial class TrackerSession
     {
         // Kinah, bound Kinah and Abyss Points come from the game's own messages while the packets count them (TrackerSession.Packets.cs)
         if (PacketsHave(ev)) return;
+        ev = KillPaid(ev);
         // counted where it belongs, and stamped with where that was (the activity: a run, farming, a reward screen)
         Feed(ev, Count(ev));
         // a line in the seconds around a reward picture is its second witness (TrackerSession.Witness.cs)
@@ -2689,6 +2699,16 @@ public sealed partial class TrackerSession
     public const double PayoutWindowSeconds = 3;
     /// <summary>How long after a kill of the player's a bound Kina line of a kill's size is that kill's, not a payout.</summary>
     const double KillKinaSeconds = 6;
+
+    /// <summary>
+    /// Bound Kina of a kill's size (<see cref="SessionEngine.AbyssKillKinaMax"/>) out of a run, with a kill of the player's within
+    /// <see cref="PacketNearSeconds"/> of it either way (the game can tell the kill a few seconds after its pay): that kill's Kina, marked <see cref="KinahChanged.KillPay"/> so it counts as farming Kinah. A quest's or a pass's bound
+    /// Kina, with no kill beside it or more than a kill pays, stays set aside.
+    /// </summary>
+    GameEvent KillPaid(GameEvent ev) =>
+        ev is KinahChanged { Bound: true, KillPay: false, Delta: > 0 and <= SessionEngine.AbyssKillKinaMax } k && Instances.Current == null && _boss == null
+            && Math.Abs((k.Time - _lastKillAt).TotalSeconds) <= PacketNearSeconds
+            ? k with { KillPay = true } : ev;
     /// <summary>A loot list row out in the world with no kill or gather this long before it is a box or a reward.</summary>
     public const double NoKillSeconds = 15;
     /// <summary>A Soul Crystal line of at most this many, with a kill counted at most <see cref="KillCrystalSeconds"/> s before it, is the kill's (0.8.61).</summary>
@@ -2843,7 +2863,7 @@ public sealed partial class TrackerSession
             // ...and out of it, where some maps pay a kill's Kina bound too (2026-11-20 11:07 to 11:16, Western Altamia: every
             // kill's Kina bound, so a Spiritstone dropped among the kills at 11:16:25 was "a box's or a reward's contents"):
             // bound Kina of a kill's size with a kill of the player's just before it is that kill's
-            if (kb.Delta <= SessionEngine.AbyssKillKinaMax && (ev.Time - _lastKillAt).TotalSeconds is >= -1 and <= KillKinaSeconds) return;
+            if (kb.KillPay || kb.Delta <= SessionEngine.AbyssKillKinaMax && (ev.Time - _lastKillAt).TotalSeconds is >= -1 and <= KillKinaSeconds) return;
             var until = now.AddSeconds(PayoutWindowSeconds);
             if (until > _boxUntil) _boxUntil = until;
             return;

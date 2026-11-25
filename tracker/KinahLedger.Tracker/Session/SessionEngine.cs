@@ -20,6 +20,8 @@ public sealed partial class SessionEngine
     public Dictionary<string, long> Currencies { get; } = new();
     /// <summary>The bound Kina kills dropped in the Abyss's zones, counted in <see cref="Kinah"/> (a kill's Kina is bound there).</summary>
     public long AbyssBoundKinah { get; private set; }
+    /// <summary>All the bound Kina kills dropped, in the Abyss or out of it (<see cref="KinahChanged.KillPay"/>), counted in <see cref="Kinah"/>.</summary>
+    public long KillBoundKinah { get; private set; }
     /// <summary>The most bound Kina one Abyss kill drops (2026-11-13: 100 to 2,100): more is a quest's or a reward's, set aside as anywhere.</summary>
     public const long AbyssKillKinaMax = 5_000;
     /// <summary>True for bound Kina a kill dropped: in an Abyss zone, and no more than a kill drops.</summary>
@@ -693,10 +695,14 @@ public sealed partial class SessionEngine
                     // ...except in the Abyss, where every kill's Kina is bound: there a kill's bound Kina is the kill's Kinah, in
                     // the count, its zone and the enemy's (Steven, 2026-11-13: none of his Abyss Kinah showed in Sulfur Tree Island)
                     bool abyssKill = k.Bound && IsAbyssKillKina(k.Delta, _zone);
-                    if (k.Bound && !abyssKill) { KinahBound += k.Delta; KinahSkipped += k.Delta; RewardsSkipped++; }
+                    // ...and out of it, where since 2026-11-23 nearly every kill pays its Kina bound (Steven, 2026-11-25 10:45, Crimson
+                    // Isle and Drana Cultivation Area: 595 bound Kina lines to 27 plain, Kinah/h stood still through the kills)
+                    bool killKina = abyssKill || k.Bound && k.KillPay && k.Delta > 0 && k.Delta <= AbyssKillKinaMax;
+                    if (k.Bound && !killKina) { KinahBound += k.Delta; KinahSkipped += k.Delta; RewardsSkipped++; }
                     else
                     {
                         if (abyssKill) AbyssBoundKinah += k.Delta;
+                        if (killKina) KillBoundKinah += k.Delta;
                         Kinah += k.Delta;
                         if (k.Delta > 0)
                         {
