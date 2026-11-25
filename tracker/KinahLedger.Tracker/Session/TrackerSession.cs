@@ -1046,8 +1046,14 @@ public sealed partial class TrackerSession
     }
 
     /// <summary>One pass of the classifier (also what the tests feed their synthetic frames through).</summary>
-    internal bool ScenePass(System.Drawing.Bitmap? thumb, SceneSignals signals, DateTime now) => Scene.Observe(thumb, signals, now);
-    internal bool ScenePass(FrameStats? stats, SceneSignals signals, DateTime now) => Scene.Observe(stats, signals, now);
+    internal bool ScenePass(System.Drawing.Bitmap? thumb, SceneSignals signals, DateTime now) => Loaded(Scene.Observe(thumb, signals, now), now);
+    internal bool ScenePass(FrameStats? stats, SceneSignals signals, DateTime now) => Loaded(Scene.Observe(stats, signals, now), now);
+    /// <summary>
+    /// A loading screen seen by the scene pass marks the move behind it (<see cref="LoadingSeen"/>) at once: the zone read after
+    /// it comes when the minimap is back, and SteadyDue only runs on a read, so it never saw the Loading scene itself (Steven,
+    /// 2026-11-25 11:21:49: a loading screen into the Abyss, the minimap read the Abyss at 11:21:57, the place moved 70 s later)
+    /// </summary>
+    bool Loaded(bool changed, DateTime now) { if (Scene.Current == KinahLedger.Session.Scene.Loading) LoadingSeen(now); return changed; }
 
     /// <summary>The readers' signs this pass, from what they last saw.</summary>
     SceneSignals SignalsNow(DateTime now) => new()
