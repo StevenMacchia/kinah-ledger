@@ -1102,6 +1102,7 @@ public partial class MainWindow : Window
         if (inAbyss) _rateWarming = false;
         // (the engine counts a kill's bound Kina as Kinah in the Abyss's zones since 0.10.69: SessionEngine.IsAbyssKillKina)
         _boundInKinah = inAbyss && e.AbyssBoundKinah > 0;
+        _killBoundInKinah = !_boundInKinah && e.KillBoundKinah > 0;
         var s = Build(e, h, t.Kills);
         _here = HereOf(e, inAbyss);
         string worth = s.Value > 0 ? $" · worth {Fk(s.Value)} ({Fk(s.Value / h)}/hr)" : "";
@@ -1207,7 +1208,7 @@ public partial class MainWindow : Window
     /// <summary>True once the count on screen has something in it: LOOT's first side shows it from then on.</summary>
     bool _hasSummary;
     /// <summary>The Kinah figures on screen count bound Kinah too (the Abyss, where every Kinah drop is bound).</summary>
-    bool _boundInKinah;
+    bool _boundInKinah, _killBoundInKinah;
 
     /// <summary>
     /// What the Farming page stopped saying while all is well (2026-10-28), kept for the ⋯ menu: the reward lines left out

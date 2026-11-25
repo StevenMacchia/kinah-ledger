@@ -360,7 +360,7 @@ public partial class MainWindow
                     null, false, "Lilac", ("chip-rank|" + at, rank, false)));   // its hour is the ticket beside the Kinah one (FillRankTicket)
             }
             parts.Add(new QStat(Fk(kinah), L.T("Kinah"),
-                L.F("{0:N0} Kinah picked up {1}", kinah, at) + (kills > 0 ? ", " + L.F("{0} a kill", Fk(kinah / (double)kills)) : "") + (_boundInKinah ? ". " + L.T("Bound Kinah is in it: in the Abyss every Kinah drop is bound.") : ". " + L.T("Quest rewards and bound Kinah are left out.")) + (FullShown ? "" : " " + L.T("Click for Kinah by enemy.")) + In(hs?.Kinah ?? 0, true, "of it"),
+                L.F("{0:N0} Kinah picked up {1}", kinah, at) + (kills > 0 ? ", " + L.F("{0} a kill", Fk(kinah / (double)kills)) : "") + (_boundInKinah ? ". " + L.T("Bound Kinah is in it: in the Abyss every Kinah drop is bound.") : _killBoundInKinah ? ". " + L.T("Your kills' bound Kinah is in it; quest rewards are left out.") : ". " + L.T("Quest rewards and bound Kinah are left out.")) + (FullShown ? "" : " " + L.T("Click for Kinah by enemy.")) + In(hs?.Kinah ?? 0, true, "of it"),
                 Open("who"), _qChip == "who", "Gold", kinah > 0 ? ("chip-kinah|" + at, kinah, true) : null, Here(hs?.Kinah ?? 0, true)));
             parts.Add(new QStat(s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", s.Value > 0 || kinds == 0 ? L.T("loot") : L.T(kinds == 1 ? "kind of loot" : "kinds of loot"),
                 (kinds == 0 ? L.T("Nothing picked up yet.") : $"{kindsText} {at}" + (s.Priced > 0 ? ": " + L.F("{0} at the lowest Market price, {1}", Fk(s.Value), QCut()) : "") + (s.Unpriced > 0 ? " · " + L.F("{0} with no price yet", s.Unpriced) : "") + ".")

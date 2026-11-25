@@ -114,6 +114,7 @@
   "{0:0.#} a kill": "每次擊殺 {0:0.#}",
   "{0:N0} Kinah picked up {1}": "{1} 撿到基納 {0:N0}",
   "Bound Kinah is in it: in the Abyss every Kinah drop is bound.": "包含綁定基納：在深淵，所有基納掉落都是綁定的。",
+  "Your kills' bound Kinah is in it; quest rewards are left out.": "包含擊殺獲得的綁定基納；任務獎勵不計入。",
   "Quest rewards and bound Kinah are left out.": "任務獎勵和綁定基納不計入。",
   "Click for Kinah by enemy.": "點擊查看各敵人的基納。",
   "loot": "戰利品",

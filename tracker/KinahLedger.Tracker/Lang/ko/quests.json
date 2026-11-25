@@ -114,6 +114,7 @@
   "{0:0.#} a kill": "처치당 {0:0.#}",
   "{0:N0} Kinah picked up {1}": "{1} 키나 {0:N0} 획득",
   "Bound Kinah is in it: in the Abyss every Kinah drop is bound.": "귀속 키나가 포함돼요. 어비스에서는 키나 드롭이 모두 귀속이에요.",
+  "Your kills' bound Kinah is in it; quest rewards are left out.": "처치로 얻은 귀속 키나가 포함돼요. 퀘스트 보상은 빠져 있어요.",
   "Quest rewards and bound Kinah are left out.": "퀘스트 보상과 귀속 키나는 빠져 있어요.",
   "Click for Kinah by enemy.": "클릭하면 적별 키나를 봐요.",
   "loot": "전리품",

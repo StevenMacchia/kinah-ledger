@@ -14,7 +14,11 @@ public abstract record GameEvent(DateTime Time)
 }
 
 public sealed record ItemAcquired(DateTime Time, long ItemId, int Count, bool Bound) : GameEvent(Time);
-public sealed record KinahChanged(DateTime Time, long Delta, bool Bound) : GameEvent(Time);
+public sealed record KinahChanged(DateTime Time, long Delta, bool Bound) : GameEvent(Time)
+{
+    /// <summary>Bound Kina of a kill's size with a kill of the player's beside it: that kill's Kina, counted as farming Kinah anywhere (TrackerSession.KillPaid).</summary>
+    public bool KillPay { get; init; }
+}
 public sealed record MobKilled(DateTime Time, long MobId) : GameEvent(Time);
 /// <summary>
 /// A kill or death of the player's as the game's own messages tell it (Packets/FightTally.cs): a kill of a player

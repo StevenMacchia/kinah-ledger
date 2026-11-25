@@ -120,6 +120,8 @@ public sealed partial class TrackerSession
                 CommitWith(new RankPointsLost(c.At, -c.Delta) { Via = "packets" }, "counter");
                 continue;
             }
+            // Kinah spent out of the Market: a teleport's fee among others, so a new zone read just after it is a real move (FeePaid)
+            if (!c.First && c.Delta < 0 && c.What == CurrencyKind.Kinah && MarketOpen?.Invoke(c.At) != true) FeePaid(c.At);
             if (c.First || c.Delta <= 0) { _packetHeld.RemoveAt(0); continue; }   // a baseline, or spending: nothing picked up
             string what = c.What switch { CurrencyKind.Kinah => "Kinah", CurrencyKind.BoundKinah => "bound Kinah", CurrencyKind.RankPoints => "Rank Points", _ => "Abyss Points" };
             bool nearKill = (_lastKillAt - c.At).TotalSeconds >= -PacketNearSeconds || (_lastGatherAt - c.At).TotalSeconds >= -PacketNearSeconds
