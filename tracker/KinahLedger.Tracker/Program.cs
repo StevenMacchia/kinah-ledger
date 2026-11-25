@@ -2687,6 +2687,15 @@ options: --process aion[,other]");
         Check("Loading (log-only) settles: the held reads released", Pass("loading") + $" released {ts.SceneReleased - rel}", "Loading: list Run read, craft Run released 3");
         Check("a Loading frame with the default list skips nothing", Skipped(ts), "nothing");
         Check("...and logs itself log-only", ts.Scene.ChangeLine().StartsWith("scene Loading (log-only) since ") ? "scene Loading (log-only) since <t>..." : ts.Scene.ChangeLine(), "scene Loading (log-only) since <t>...");
+        {
+            // a loading screen the scene pass saw makes the next zone read a move at once, though no zone was read during it
+            // (2026-11-25 11:21:49 into the Abyss: the place moved 70 s after the minimap named it)
+            var lz = new TrackerSession(null, settings, items, "Test") { Vote = false };
+            lz.ApplyZone("Eastern Cantas Valley", tt.AddSeconds(-90));
+            Pass("loading", lz); Pass("loading", lz);
+            lz.ApplyZone("Western Cantas Valley", tt.AddSeconds(6));
+            Check("a loading screen the scene pass saw: the zone read after it moves the place at once", lz.Place ?? "none", "Western Cantas Valley");
+        }
         Check("Explain says which features decided", ts.Scene.Explain().StartsWith("Loading: near-black") ? "Loading: near-black ..." : ts.Scene.Explain(), "Loading: near-black ...");
         Check("every picture-only state logs only by default", string.Join(" ", new[] { Scene.Bag, Scene.Loading, Scene.Death, Scene.Cutscene, Scene.ChatExpanded }.Select(s => SceneState.Gates(s) ? "gates" : "log")), "log log log log log");
         // Loading added to scene.gate.states: it skips the chat and the loot list, and drops what Unknown held

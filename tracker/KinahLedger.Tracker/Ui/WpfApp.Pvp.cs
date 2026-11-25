@@ -72,6 +72,11 @@ public static partial class WpfApp
             : f.Flags.HasFlag(FightFlags.VictimPlayer) && (f.Flags.HasFlag(FightFlags.Mine) || f.Flags.HasFlag(FightFlags.OtherKiller) && f.Flags.HasFlag(FightFlags.VictimEnemy)))))
             lines.Add(f.Flags.HasFlag(FightFlags.VictimMe) ? $"  {f.At.ToLocalTime():MM-dd HH:mm:ss} died to {f.KillerName}, cp {f.KillerCp:N0}"
                 : $"  {f.At.ToLocalTime():MM-dd HH:mm:ss} {(f.Flags.HasFlag(FightFlags.Mine) ? "killed" : $"{(f.KillerName.Length > 0 ? f.KillerName : "a monster or object")} killed")} {f.VictimName}, cp {f.VictimCp:N0}");
+        // the hits the panel's damage comes from (FightKind.Hit), by target, and each kill's victim id beside them
+        var hitsBy = ev.Where(f => f.Kind == FightKind.Hit).GroupBy(f => f.VictimId).ToList();
+        lines.Add($"hits: {hitsBy.Sum(g => g.Count())} on {hitsBy.Count} targets" + string.Concat(hitsBy.OrderByDescending(g => g.Count()).Take(8).Select(g => $"; id {g.Key} x{g.Count()} {g.Sum(h => h.Delta):N0} '{g.First().VictimName}' {g.First().Flags}")));
+        foreach (var f in ev.Where(f => f.Kind == FightKind.Kill && f.Flags.HasFlag(FightFlags.VictimPlayer)))
+            lines.Add($"  kill {f.At.ToLocalTime():HH:mm:ss} victim id {f.VictimId} '{f.VictimName}' killer id {f.KillerId} '{f.KillerName}' {f.Flags}");
         bool exp0 = ParserRows.ExpandedPref, still0 = Motion.Still;
         double width0 = HudStackLook.FightWidth;
         try
