@@ -3530,6 +3530,13 @@ options: --process aion[,other]");
                 "1 True 1 0 True True True");
         }
         {
+            // the 2026-11-25 patch names (data/extra-items.json): each resolves from its name, to its own name
+            string[] names = { "Growth Pet Chest (Bound)", "Skin Chest (10 times) (Bound)", "Sync Stone (Unique) (Bound)", "Customization Voucher (Bound)",
+                "Appearance Change Voucher (7 Days) (Bound)", "Wrathful Material Selection Chest (Bound)", "Corroded Decontamination Facility Coin" };
+            var got = names.Select(n => items.NameOf(items.IdOf(n))).ToArray();
+            Check("the 2026-11-25 patch's items resolve to their own names", string.Join(" | ", got), string.Join(" | ", names));
+        }
+        {
             // the Daeva Pass window over the chat, its title read only after the chat settled (reads.log 2026-11-11 15:13:05 to
             // 15:13:06.8; Steven: "daeva pass reward counted towards my gathered loot in the bag"): its own words in the chat's
             // place open it, so the settle's Battle Enhance Scroll and Odyle Energy are the pass's
