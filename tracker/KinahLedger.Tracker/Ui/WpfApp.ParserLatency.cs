@@ -16,9 +16,11 @@ public static partial class WpfApp
     /// in step), then at the recording's pace, each piece stamped with the moment it is fed (its "capture"). The events go
     /// to a Parser exactly as live (BossSink's path, the kill events' own); the window shows the Parser page and the overlay
     /// over it, and redraws as it does live. Prints how many events came and the median, 95th percentile and worst of
-    /// capture to screen. Needs a decoder of interface version 4 or later beside the exe.
+    /// capture to screen. Needs a decoder of interface version 4 or later beside the exe. <paramref name="from"/>: the local
+    /// time of day (the capture's own day) the recording's pace starts at; before it, it goes through as fast as it can (a
+    /// slow stretch an hour into a recording is reached at once). <paramref name="tab"/>: the Parser page's tab to time.
     /// </summary>
-    public static int ParserLatencyReplay(Settings settings, List<string> files, string mode, double minutes, int port)
+    public static int ParserLatencyReplay(Settings settings, List<string> files, string mode, double minutes, int port, TimeSpan? from = null, string? tab = null)
     {
         if (NativeDecoder.Version < 4) { Console.WriteLine($"this build's decoder reads no fights for the Parser (interface version {NativeDecoder.Version}); put a version 4 klnet.dll beside the exe"); return 1; }
         Ensure();
@@ -29,12 +31,14 @@ public static partial class WpfApp
         var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show();
         w.ShowParserReplay(parser, BossParser.ModeOf(mode));
+        if (tab != null) w.ParserTabForTest = tab;
         // the Kinah overlay as live, off every screen: the meter in it is drawn and timed (still: no anchoring)
         var hud = new HudWindow(null, HudLooks.Strip, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
         hud.Update(new Dictionary<string, string> { ["feedText"] = "Spiritstone", ["feedValue"] = "+7.5K", ["feedRate"] = "1.27M", ["feedUnit"] = "an hour" });
         hud.Show();
         w.AttachHudForTest(hud);
         MainWindow.ParserLatencyStats.Clear(); MainWindow.MeterDrawStats.Clear();
+        MainWindow.PageProfile = Environment.GetEnvironmentVariable("KL_PAGE_PROFILE") == "1";
         // the frames drawn while the meter moves: the gap from one to the next (a frame over ~17 ms late is a dropped one)
         var frameGaps = new ParserLatency();
         TimeSpan lastFrame = TimeSpan.Zero;
@@ -92,6 +96,7 @@ public static partial class WpfApp
                     {
                         using var dec = NativeDecoder.TryOpen()!;
                         bool live = false; DateTime start = default; var sw = new Stopwatch();
+                        DateTime? paceAt = from is { } fr && conn.FirstOrDefault().At is var a0 && a0 != default ? a0.ToLocalTime().Date.Add(fr).ToUniversalTime() : null;
                         var st = new TcpStream
                         {
                             OnData = (d, _) =>
@@ -108,7 +113,7 @@ public static partial class WpfApp
                         };
                         foreach (var (at, s) in conn)
                         {
-                            if (live)
+                            if (live && (paceAt == null || at >= paceAt))
                             {
                                 if (!sw.IsRunning) { sw.Start(); start = at; }
                                 double due = (at - start).TotalMilliseconds;
@@ -131,7 +136,8 @@ public static partial class WpfApp
         // the window's own loop runs meanwhile; the session's pass part (the stale check, a fight's end) each second, as live
         var frame = new System.Windows.Threading.DispatcherFrame();
         var tick = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        tick.Tick += (_, _) => { parser.Tick(DateTime.UtcNow); if (done) { tick.Stop(); frame.Continue = false; } };
+        int ticks = 0;
+        tick.Tick += (_, _) => { parser.Tick(DateTime.UtcNow); if (++ticks % 10 == 0) Console.WriteLine($"  {ticks} s: {w.ParserPageStateForTest}"); if (done) { tick.Stop(); frame.Continue = false; } };
         tick.Start();
         System.Windows.Threading.Dispatcher.PushFrame(frame);
         DoEvents();
@@ -143,6 +149,11 @@ public static partial class WpfApp
         var (d50, d95, dmax, dn) = MainWindow.MeterDrawStats.Stats();
         var (g50, g95, gmax, gn) = frameGaps.Stats();
         Console.WriteLine($"meter draws ({dn:N0}, the window's own time): median {d50:0.0} ms, 95th percentile {d95:0.0} ms, worst {dmax:0.0} ms; frames: {frames / Math.Max(1, frameClock.Elapsed.TotalSeconds):0} a second, gap median {g50:0.0} ms, 95th percentile {g95:0.0} ms, worst {gmax:0} ms");
+        if (MainWindow.PageProfile)
+        {
+            int b = Math.Max(1, MainWindow.PageBuilds); var p = MainWindow.PageMs;
+            Console.WriteLine($"page builds {MainWindow.PageBuilds:N0}, a build: head {p[0] / b:0.0} ms, fight {p[1] / b:0.0} ms, list {p[2] / b:0.0} ms, layout {p[3] / b:0.0} ms; graphs drawn {ParserGraphs.Draws:N0}x ({ParserGraphs.DrawMs:0} ms), their data {ParserGraphs.DataMs:0} ms");
+        }
         hud.Close();
         w.Close();
         return n > 0 && p95 < 100 ? 0 : 1;

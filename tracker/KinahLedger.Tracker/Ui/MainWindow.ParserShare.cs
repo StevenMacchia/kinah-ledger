@@ -446,6 +446,7 @@ public partial class MainWindow
     /// <summary>For a render: the store-v2 sample figures (crits, the timeline, damage taken) on every view, or off again.</summary>
     internal static void ParserDepthSampleForRender(bool on) => ParserViewSample = on ? ParserDemoDepth : null;
     /// <summary>The fight the page shows: the kept one open, else the one under way.</summary>
+    internal string ParserPageStateForTest => $"part {_part}, welcome {_welcome}, live {ParserLive?.Boss}/{ParserLive?.ModeKind}/{ParserLive?.Roster.Count}, page {ParserPage.Children.Count} parts, graphs {_graphs?.Redraws}";
     internal Encounter? ParserShownForTest => _parserOpen != null ? ParserPast().FirstOrDefault(x => x.Id == _parserOpen) : ParserLive;
     internal DateTime ShareNowForTest(Encounter e) => ShareNowOf(e);
     /// <summary>For a render and the options test: the kill prompt on the newest kept kill, as just after it.</summary>
