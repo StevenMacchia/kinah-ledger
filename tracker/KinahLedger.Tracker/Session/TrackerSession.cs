@@ -1302,11 +1302,11 @@ public sealed partial class TrackerSession
     }
 
     /// <summary>One pickup counted everywhere it goes: the run, the window, the crafting part, the balance check, listeners.</summary>
-    void Commit(GameEvent ev)
+    void Commit(GameEvent ev, bool inferKillPay = true)
     {
         // Kinah, bound Kinah and Abyss Points come from the game's own messages while the packets count them (TrackerSession.Packets.cs)
         if (PacketsHave(ev)) return;
-        ev = KillPaid(ev);
+        if (inferKillPay) ev = KillPaid(ev);
         // counted where it belongs, and stamped with where that was (the activity: a run, farming, a reward screen)
         Feed(ev, Count(ev));
         // a line in the seconds around a reward picture is its second witness (TrackerSession.Witness.cs)
@@ -1352,7 +1352,7 @@ public sealed partial class TrackerSession
         // rare pickups still waiting from an earlier step that had no picture to read again (a replay): counted as read
         CommitHeld();
         try { ProcessChatCore(lines, now); }
-        finally { ReleaseRepeats(now); ReleaseAwaiting(now); foreach (var e in new[] { Engine, Secondary }.Concat(Views())) e?.SettleQuest(now); Score.Tick(now); }
+        finally { ReleasePayouts(now); ReleaseRepeats(now); ReleaseAwaiting(now); foreach (var e in new[] { Engine, Secondary }.Concat(Views())) e?.SettleQuest(now); Score.Tick(now); }
     }
 
     void ProcessChatCore(List<string> lines, DateTime now)
@@ -1580,7 +1580,10 @@ public sealed partial class TrackerSession
                 // a kill's line read, before any witness holds it (a Kina line waits for the counter): what a crystal just after
                 // it is judged by (KillJustBefore)
                 if (p0 is KinahChanged { Bound: false, Delta: > 0 } or MobKilled or XpGained || (p0 is CurrencyGained kg && kg.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)))
+                {
                     if (p0.Time > _killLineAt) _killLineAt = p0.Time;
+                    PayoutKill(p0.Time);
+                }
                 var parsed = p0 with { Via = p0.Via.Length > 0 ? via + " · " + p0.Via : via };
                 // the loot list beside the character already added this pickup (this chat line came late): it counts once
                 if (_cross.Chat(parsed, now)) { any = true; continue; }
@@ -1640,8 +1643,18 @@ public sealed partial class TrackerSession
                 if (ev is ItemAcquired or RewardReceived && !via.Contains("count read again") && _parser.CountUnsure(raw)) MarkAssumed(ev);
                 // an item that is a reward only because a window was open doesn't open a new one: a window would chain on
                 // and take the next kill's drop (a payout's item, then a Spiritstone 10 s later, 2026-10-23)
-                if (why == null) NoteReward(ev, now);
+                bool payoutWaiting = why == null && NoteReward(ev, now, reward || baseKina);
                 any = true; _lastActivity = DateTime.UtcNow;
+                if (payoutWaiting) continue;
+                if (ev is ItemAcquired pending && !made && !inRun && _boss == null
+                    && PayoutAt(pending.Time) is { } payout && !BoxName.IsMatch(_items.NameOf(pending.ItemId))
+                    && !GatherJustProduced(pending.ItemId, pending.Time))
+                {
+                    payout.Pickups.Add(new(pending, p0, raw, meta, lines));
+                    _applied.Add((p0, ItemRepeatGuard.Verdict.Wait));
+                    kept++;
+                    continue;
+                }
                 // the Kinah counter is the deciding witness for Kina while it is read (KinaWitness): the line waits for its rise
                 if (ev is KinahChanged { Bound: false, Delta: > 0 } kw && KinaWitnessOn(now)) { SettleKina(_kina.Offer(new KinaWitness.Candidate(kw.Delta, now, raw.Trim(), ev), now), now); continue; }
                 // a rare drop waits for the second read of this chat picture (ReadOnce, the same pass) before it counts
@@ -2777,7 +2790,7 @@ public sealed partial class TrackerSession
         // a drop is still a drop (DropAfterScreen)
         : !inRun && t <= _rewardScreenUntil && !(itemId != 0 && GatheringNow(itemId, t)) && !DropAfterScreen(itemId, t, firstSeen, crystal) ? "an event's or expedition's reward (its reward screen was up)"
         : t <= _inventoryUntil ? "the inventory at work (storage, Quick Register, the wardrobe)"
-        : !inRun && !isBox && t <= _boxUntil ? "a box's or a reward's contents" : null;
+        : !inRun && !isBox && (t <= _boxUntil || crystal != null && PayoutAt(t) is { Kill: false }) ? PayoutReward : null;
     /// <summary>Until when what lands is an event's or expedition's reward: a minute after its reward screen was last seen.</summary>
     DateTime _rewardScreenUntil = DateTime.MinValue;
     public const double RewardScreenSeconds = 60;
@@ -2855,30 +2868,39 @@ public sealed partial class TrackerSession
         if (t > _marketAt) _marketAt = t;
     }
 
-    /// <summary>A reward line, or an item that is a box ("Growth Pet Chest"), out in the world opens the window for what comes out of it.</summary>
-    void NoteReward(GameEvent ev, DateTime now)
+    /// <summary>Open a reward window, or hold a kill-sized bound Kinah payout for the later kill line.</summary>
+    bool NoteReward(GameEvent ev, DateTime now, bool rewardContext)
     {
-        if (InRunFor(ev) || _boss != null) return;
+        if (InRunFor(ev) || _boss != null) return false;
         // a Kina payout marked (Bound) (a quest, a pass or a claim): an item printed with it, in the same read or the next
         // few seconds, is the payout's too (Steven, 2026-10-23 12:39: 11,000 Kina (Bound) and a refining stone, counted as a drop)
         if (ev is KinahChanged { Bound: true, Delta: > 0 } kb)
         {
             // in the Abyss every kill's Kina is bound: a kill's is no payout, and the drops printed with it are drops (Steven,
             // 2026-11-13 18:44: Earth Spellbook, Earth Greaves and the soul crystals beside each kill's bound Kina were set aside)
-            if (SessionEngine.IsAbyssKillKina(kb.Delta, Zone)) return;
+            if (SessionEngine.IsAbyssKillKina(kb.Delta, Zone)) return false;
             // ...and out of it, where some maps pay a kill's Kina bound too (2026-11-20 11:07 to 11:16, Western Altamia: every
             // kill's Kina bound, so a Spiritstone dropped among the kills at 11:16:25 was "a box's or a reward's contents"):
             // bound Kina of a kill's size with a kill of the player's just before it is that kill's
-            if (kb.KillPay || kb.Delta <= SessionEngine.AbyssKillKinaMax && (ev.Time - _lastKillAt).TotalSeconds is >= -1 and <= KillKinaSeconds) return;
+            if (kb.KillPay || kb.Delta <= SessionEngine.AbyssKillKinaMax && (ev.Time - _lastKillAt).TotalSeconds is >= -1 and <= KillKinaSeconds) return false;
             var until = now.AddSeconds(PayoutWindowSeconds);
+            if (!rewardContext && kb.Delta <= SessionEngine.AbyssKillKinaMax && ev.Time > _boxUntil)
+            {
+                // The currency's existing lookback is longer than the item filter's. Keep its original
+                // credit when that lookback already vouched for it, and wait only on the items.
+                bool deferCurrency = KillPaid(kb) is KinahChanged { KillPay: false };
+                _payouts.Add(new(kb.Time, until, deferCurrency ? kb : null));
+                return deferCurrency;
+            }
             if (until > _boxUntil) _boxUntil = until;
-            return;
+            return false;
         }
         string? name = ev switch { RewardReceived r => r.Name, ItemAcquired a => _items.NameOf(a.ItemId), _ => null };
-        if (name == null || name.Contains("Loot Chest", StringComparison.OrdinalIgnoreCase)) return;
+        if (name == null || name.Contains("Loot Chest", StringComparison.OrdinalIgnoreCase)) return false;
         bool box = BoxName.IsMatch(name) && GatheringCatalog.Find(name) is not { AnyNode: true };
         if (ev is RewardReceived || box) _boxUntil = now.AddSeconds(RewardWindowSeconds);
         if (box) _boxOpenedUntil = now.AddSeconds(RewardWindowSeconds);
+        return false;
     }
 
     /// <summary>
@@ -3972,6 +3994,12 @@ public sealed partial class TrackerSession
                 // gather around it is one (a box opened in town). Never a drop (Steven, 2026-10-23)
                 if (!made && parsed is ItemAcquired lr)
                 {
+                    if (!InRun && PayoutAt(now) is { Kill: false } && !GatherJustProduced(lr.ItemId, now))
+                    {
+                        // Its chat line will wait for the same payout decision. Let it claim this row if it arrives.
+                        _cross.Declined(parsed, now);
+                        continue;
+                    }
                     var why = NotForGather(RewardWhy(now, false, lr.ItemId), lr.ItemId, lr.Count, now);
                     // a gathering material is a gather itself (the chat may have missed its line), never a box's contents
                     _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -5205,6 +5233,7 @@ public sealed partial class TrackerSession
     {
         var t = (at ?? DateTime.UtcNow).AddSeconds(ChatVoter.MaxSeconds + 0.1);
         if (_voter.Waiting > 0 && _prevRead.Count > 0) ProcessChat(new List<string>(_prevRead), t);
+        ReleasePayouts(t, final: true);
         if (_kina.Readings > 0) SettleKina(_kina.Flush(t), t);
         CommitHeld();
         ReleaseRepeats(t.AddSeconds(ItemRepeatGuard.HoldSeconds), final: true);   // item lines still waiting for a second pickup's witness

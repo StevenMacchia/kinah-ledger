@@ -461,6 +461,53 @@ static class ChatCountTests
             Check("...a forward base is a base too", Line("Andsha Forward Base"), "0 0 9000");
         }
 
+        {
+            const string kina = "Acquired 201 Kina (Bound).";
+            const string stone = "Spiritstone acquired.";
+            const string later = "Obtained 1 Dracuni Herbalist Soul Points.";
+            var seed = new[] { "[P1] hello", "[P2] hi there" };
+            var pickup = seed.Concat(new[] { kina, stone }).ToList();
+            var session = new TrackerSession(null, settings, items, "Test");
+            session.ProcessChat(seed.ToList(), t0);
+            for (int i = 1; i <= 4; i++) session.ProcessChat(pickup, t0.AddSeconds(i * 0.6));
+            Check("English bound Kinah and item await the next chat read", $"{session.Engine.Kinah}/{N(session, "Spiritstone")}/{session.Engine.RewardSnapshot().Count}", "0/0/0");
+            var confirmed = pickup.Append(later).ToList();
+            for (int i = 5; i <= 12; i++) session.ProcessChat(confirmed, t0.AddSeconds(i * 0.6));
+            session.FlushVotes(t0.AddSeconds(8));
+            Check("English late Soul Points confirm bound Kinah and item once",
+                $"{session.Engine.Kinah}/{N(session, "Spiritstone")}/{session.Engine.RewardSnapshot().Count}", "201/1/0");
+
+            var reward = new TrackerSession(null, settings, items, "Test");
+            reward.ProcessChat(seed.ToList(), t0);
+            for (int i = 1; i <= 12; i++) reward.ProcessChat(pickup, t0.AddSeconds(i * 0.6));
+            for (int i = 13; i <= 16; i++) reward.ProcessChat(confirmed, t0.AddSeconds(i * 0.6));
+            reward.FlushVotes(t0.AddSeconds(10));
+            Check("English an unrelated later kill leaves an expired pickup as a reward",
+                $"{reward.Engine.Kinah}/{N(reward, "Spiritstone")}/{reward.Engine.RewardSnapshot().GetValueOrDefault("Spiritstone")}", "0/0/1");
+        }
+        {
+            var session = new TrackerSession(null, settings, items, "Test") { Vote = false };
+            session.ProcessChat(new() { "[P1] hello" }, t0);
+            session.ProcessChat(new() { "[P1] hello", "Acquired 11,000 Kina (Bound).", "Spiritstone acquired." }, t0.AddSeconds(1));
+            session.ProcessChat(new() { "[P1] hello", "Acquired 11,000 Kina (Bound).", "Spiritstone acquired.", "Obtained 1 Dracuni Herbalist Soul Points." }, t0.AddSeconds(2));
+            session.FlushVotes(t0.AddSeconds(3));
+            Check("a quest-sized bound payout remains a reward beside a kill",
+                $"{session.Engine.Kinah}/{N(session, "Spiritstone")}/{session.Engine.RewardSnapshot().GetValueOrDefault("Spiritstone")}", "0/0/1");
+        }
+        {
+            var session = new TrackerSession(null, settings, items, "Test") { Vote = false };
+            var lines = new List<string> { "[P1] hello" };
+            session.ProcessChat(lines.ToList(), t0);
+            lines.Add("Obtained 1 Dracuni Herbalist Soul Points.");
+            session.ProcessChat(lines.ToList(), t0.AddSeconds(1));
+            lines.Add("Acquired 201 Kina (Bound).");
+            lines.Add("Spiritstone acquired.");
+            session.ProcessChat(lines.ToList(), t0.AddSeconds(9));
+            Check("an earlier kill keeps the existing bound Kinah credit while the item waits",
+                $"{session.Engine.Kinah}/{N(session, "Spiritstone")}", "201/0");
+            session.FlushVotes(t0.AddSeconds(10));
+        }
+
         // an item line the chat shows again after a scroll (ItemRepeatGuard; 2026-10-24 15:59, Kukuru 2 and Orichalcum Ore 4
         // for 1 and 3): a read three lines long that shares only its top two with the next one lines that one up on them, so
         // the line counted a moment ago comes back as new. Without a second witness it is that line; with a fresh loot list
