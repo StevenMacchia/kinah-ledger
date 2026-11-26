@@ -276,7 +276,7 @@ public partial class MainWindow
         long drawStart = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
-            if (_part == "Parser") FillParserPage();
+            if (_part == "Parser") PageOnHit();
             ParserOverlayTick();
         }
         catch (Exception ex) { CrashLog.Write("parser page", ex); }
@@ -292,6 +292,28 @@ public partial class MainWindow
             ParserLatencyStats.Add(ms); ParserLatencyMinute.Add(ms);
         };
         System.Windows.Media.CompositionTarget.Rendering += h;
+    }
+
+    /// <summary>
+    /// The page's shortest time between two redraws for hits (the overlay keeps <see cref="ParserFrameMs"/>): the page is
+    /// built and laid out anew each time, a far bigger thing than the overlay's rows (2026-11-25: at the overlay's pace a boss
+    /// fight's page took the window most of its time and the Parser lagged). Its graphs move at most every 250 ms anyway.
+    /// </summary>
+    internal const double PageFrameMs = 250;
+    long _pageLastFill;
+    System.Windows.Threading.DispatcherTimer? _pageTimer;
+
+    /// <summary>A hit's redraw of the page: now when the last is <see cref="PageFrameMs"/> old, else once when it is.</summary>
+    void PageOnHit()
+    {
+        double since = System.Diagnostics.Stopwatch.GetElapsedTime(_pageLastFill).TotalMilliseconds;
+        if (_pageLastFill == 0 || since >= PageFrameMs) { _pageTimer?.Stop(); _pageLastFill = System.Diagnostics.Stopwatch.GetTimestamp(); FillParserPage(); return; }
+        if (_pageTimer == null)
+        {
+            _pageTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render);
+            _pageTimer.Tick += (_, _) => { _pageTimer!.Stop(); _pageLastFill = System.Diagnostics.Stopwatch.GetTimestamp(); try { if (_part == "Parser") FillParserPage(); } catch (Exception ex) { CrashLog.Write("parser page", ex); } };
+        }
+        if (!_pageTimer.IsEnabled) { _pageTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, PageFrameMs - since)); _pageTimer.Start(); }
     }
 
     /// <summary>A line a minute in reads.log: how fast the Parser drew.</summary>
@@ -334,7 +356,23 @@ public partial class MainWindow
         catch (Exception ex) { CrashLog.Write("parser page", ex); }
     }
 
-    void RedrawParserPage() { _drawnSig.Remove("parserpage"); FillParserPage(); }
+    void RedrawParserPage() { _drawnSig.Remove("parserpage"); _historyKey = null; FillParserPage(); }
+
+    FrameworkElement? _history;
+    string? _historyKey;
+    /// <summary>
+    /// The kept pulls' card, built again only when what it shows can have changed (a pull kept, a filter, the day, the look):
+    /// a live fight redraws the page on every hit and the list under it stays the same (2026-11-25: the page's layout, the
+    /// list's rows with it, took the window most of its time in a boss fight and the Parser lagged).
+    /// </summary>
+    FrameworkElement HistoryKept(List<Encounter> past, DateTime now)
+    {
+        var last = past.LastOrDefault();
+        string key = $"{past.Count}:{last?.Id}:{last?.Outcome}:{last?.End}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserAllRows}|{PFilters}:{_parserPrefs.Hovers}|{Encounter.ActiveBasis}:{Encounter.BossOnly}|{now.ToLocalTime().Date:yyyyMMdd}|{Skins.Current}|{L.Code}";
+        if (_history == null || _historyKey != key) { _history = ParserHistory(past, now); _historyKey = key; }
+        else if (_history.Parent is Panel p) p.Children.Remove(_history);
+        return _history;
+    }
 
     /// <summary>The Parser has a window of its own over the game: Options › In game › Parser › Separate parser overlay, or no Kinah overlay to sit in.</summary>
     internal bool ParserOverlaySeparate => _parserPrefs.Separate || !HudWanted || _hud == null;
@@ -628,14 +666,27 @@ public partial class MainWindow
         if (inspect == null && open == null) _parserOpen = null;
         // over a held fight, the Ready line ("Ready in Ferocious Horn Den") sits in the head, beside the copy buttons
         bool ready = inspect == null && open == null && pageLive == null && held != null && block == null;
+        long p0 = System.Diagnostics.Stopwatch.GetTimestamp();
         ParserPage.Children.Add(ParserHead(past, ready ? ParserReadyLine(where, live, now) : null));
+        long p1 = System.Diagnostics.Stopwatch.GetTimestamp();
         if (inspect != null) { ParserPage.Children.Add(inspect); return; }
         if (open != null) { ParserPage.Children.Add(FightBlock(open, now, past, live: false)); return; }
         if (pageLive != null) ParserPage.Children.Add(FightBlock(pageLive, now, past, live: true));
         else if (held != null) ParserPage.Children.Add(FightBlock(held, now, past, live: false, held: true));
         else if (block == null) ParserPage.Children.Add(ParserWaitingCard(where, past));
-        ParserPage.Children.Add(ParserHistory(past, now));
+        long p2 = System.Diagnostics.Stopwatch.GetTimestamp();
+        ParserPage.Children.Add(HistoryKept(past, now));
+        long p3 = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (PageProfile)
+        {
+            PageMs[0] += System.Diagnostics.Stopwatch.GetElapsedTime(p0, p1).TotalMilliseconds; PageMs[1] += System.Diagnostics.Stopwatch.GetElapsedTime(p1, p2).TotalMilliseconds;
+            PageMs[2] += System.Diagnostics.Stopwatch.GetElapsedTime(p2, p3).TotalMilliseconds; PageBuilds++;
+            long l0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            UpdateLayout(); PageMs[3] += System.Diagnostics.Stopwatch.GetElapsedTime(l0).TotalMilliseconds;
+        }
     }
+    /// <summary>For parser-latency: the page's build split in its head, the fight, the list, and the layout after it (ms, summed).</summary>
+    internal static bool PageProfile; internal static readonly double[] PageMs = new double[4]; internal static int PageBuilds;
 
     /// <summary>The fight the live view holds between boss fights: the newest boss pull kept (this session's or from before a restart) with a group in it.</summary>
     Encounter? ParserHeldFight(List<Encounter> past) => past.LastOrDefault(e => e.ModeKind == ParserModeNow && e.Roster.Any(f => !f.Other));
@@ -1223,6 +1274,7 @@ public partial class MainWindow
     internal void ShowParserReplay(BossParser parser, ParserMode mode)
     {
         _demo = false;
+        if (_welcome) SetWelcome(false);   // a test's settings may never have been through the first run: the page would never draw
         ParserSourceForTest = parser; ParserOverlayForceForTest = true;
         _parserPrefs.InKinah = true;   // the meter in the off-screen Kinah overlay, as it has been timed: its own window would show on the screen
         StartFarmTicker();

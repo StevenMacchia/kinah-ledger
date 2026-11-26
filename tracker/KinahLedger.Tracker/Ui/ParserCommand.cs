@@ -445,7 +445,7 @@ static class ParserCommand
     public static Border Group(FightView v, CommandCtx ctx, bool live, bool detail)
     {
         if (v.Members.Count == 0) { var none = new StackPanel(); none.Children.Add(T(L.T("The group wasn't seen."), 12, Faint)); return Glass(none, new Thickness(14, 12, 14, 12), 14); }
-        return Glass(Fit(w => GroupBody(v, ctx, live, detail, w)), new Thickness(6, 12, 6, 10), 14);
+        return Glass(Fit("group", w => GroupBody(v, ctx, live, detail, w)), new Thickness(6, 12, 6, 10), 14);
     }
 
     /// <summary>
@@ -709,7 +709,7 @@ static class ParserCommand
     }
 
     /// <summary>Every ability: its icon and name, damage, share, DPS, hits, average; casts, crit, max and min once the record carries them. A click on a column's name sorts by it.</summary>
-    static Border Abilities(FightView v, MemberView m, CommandCtx ctx) => Glass(Fit(w => AbilitiesBody(v, m, ctx, w)), new Thickness(6, 12, 6, 10), 14);
+    static Border Abilities(FightView v, MemberView m, CommandCtx ctx) => Glass(Fit("abilities", w => AbilitiesBody(v, m, ctx, w)), new Thickness(6, 12, 6, 10), 14);
 
     /// <summary>The abilities' table at a width: the columns that fit it, the least needed going first (Min, Back, Max, Casts, Average, Crit, Hits, DPS).</summary>
     static StackPanel AbilitiesBody(FightView v, MemberView m, CommandCtx ctx, double width)
@@ -793,23 +793,28 @@ static class ParserCommand
     const double AbilityNameMin = 190, GroupNameMin = 150;
 
     /// <summary>
-    /// A table drawn for the width it has, again when that changes (the window resized or its size picked): built once at any
-    /// width first, then for the width laid out.
+    /// A table drawn for the width it has, again when that changes (the window resized or its size picked): built first at
+    /// the width the same table was last laid out at (<paramref name="kind"/>), else at any width, then for the width laid out.
+    /// A live fight redraws the page on every hit: built at its last width, the table is built once a redraw, not twice
+    /// (2026-11-25: the second build and its layout were most of the window's time in a boss fight, and the Parser lagged).
     /// </summary>
-    static FrameworkElement Fit(Func<double, FrameworkElement> build)
+    static FrameworkElement Fit(string kind, Func<double, FrameworkElement> build)
     {
         var holder = new Border();
-        double at = double.NaN;
-        holder.Child = build(double.PositiveInfinity);
+        double at = LastWidth.TryGetValue(kind, out var known) ? known : double.NaN;
+        holder.Child = build(double.IsNaN(at) ? double.PositiveInfinity : at);
         holder.SizeChanged += (_, e) =>
         {
             double w = Math.Round(e.NewSize.Width);
             if (w < 1 || w == at) return;
-            at = w;
+            at = w; LastWidth[kind] = w;
             holder.Child = build(w);
         };
         return holder;
     }
+    static readonly Dictionary<string, double> LastWidth = new();
+    /// <summary>For the options test: the tables forget their widths (a window of another size next).</summary>
+    internal static void ForgetWidthsForTest() => LastWidth.Clear();
 
     /// <summary>
     /// The specialties chip after an ability's name: "SPEC 4·5 ▾" in gold. A click opens a card of the skill's five
@@ -968,7 +973,7 @@ static class ParserCommand
         }
 
         // every ability side by side: this pull's figure on top, the other's under it
-        body.Children.Add(Fit(w => CompareTable(v, m, cls, ctx, w)));
+        body.Children.Add(Fit("compare", w => CompareTable(v, m, cls, ctx, w)));
         // what the figures are when it isn't plain: both over every target (one of the pulls kept no boss damage apart), partial pulls
         var notes = new List<string>();
         if (!d.BossOnly && (d.A.BossView || d.B.BossView)) notes.Add(L.T("Damage to every target in both: one of these pulls kept no boss damage apart."));

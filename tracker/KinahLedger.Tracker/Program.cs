@@ -163,8 +163,9 @@ internal static class Program
                 // the party list's classes over a folder of game pictures (Ocr/PartyFrame.cs): totals by class, --rows for each picture's
                 case "party-scan": if (pos.Count == 0) { Console.WriteLine("party-scan <folder of pictures> [--rows]"); return 2; } return KinahLedger.Parser.ParserTests.PartyScan(pos[0], opts.ContainsKey("rows") || opts.ContainsKey("names"), opts.ContainsKey("names"));
                 // the Parser's capture-to-screen time over recordings replayed at their own speed (Ui/WpfApp.Parser.cs)
-                case "parser-latency": if (pos.Count == 0) { Console.WriteLine("parser-latency <capture.pcapng>...|synthetic [--mode boss|run|fight] [--minutes N] [--port 13328]"); return 2; }
-                    return Ui.WpfApp.ParserLatencyReplay(settings, pos, opts.GetValueOrDefault("mode") ?? "fight", double.TryParse(opts.GetValueOrDefault("minutes"), out var plm) ? plm : 0, int.TryParse(opts.GetValueOrDefault("port"), out var plp) ? plp : 13328);
+                case "parser-latency": if (pos.Count == 0) { Console.WriteLine("parser-latency <capture.pcapng>...|synthetic [--mode boss|run|fight] [--minutes N] [--port 13328] [--from HH:MM (local, the capture's day)] [--tab Timeline|Group|...]"); return 2; }
+                    return Ui.WpfApp.ParserLatencyReplay(settings, pos, opts.GetValueOrDefault("mode") ?? "fight", double.TryParse(opts.GetValueOrDefault("minutes"), out var plm) ? plm : 0, int.TryParse(opts.GetValueOrDefault("port"), out var plp) ? plp : 13328,
+                        TimeSpan.TryParse(opts.GetValueOrDefault("from"), out var plf) ? plf : null, opts.GetValueOrDefault("tab"));
                 // the live meter's CPU per thread, a party pull fed at real time (Ui/WpfApp.MeterLoad.cs)
                 case "meter-load": return Ui.WpfApp.MeterLoad(settings, opts);
                 // a 4K frame's copy as the window capture makes it, per thread (Ui/WpfApp.MeterLoad.cs); event-age: the Parser's events' age on arrival
