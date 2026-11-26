@@ -417,7 +417,16 @@ public sealed class CountWatch
     }
 
     /// <summary>The repeat guard counted the held pickup of <paramref name="ev"/>: it settles or is assumed from now on.</summary>
-    public void Release(object ev) { lock (_pending) foreach (var p in _pending) if (ReferenceEquals(p.Event, ev)) p.Held = false; }
+    public void Release(object ev, object? classified = null)
+    {
+        lock (_pending)
+            foreach (var p in _pending)
+                if (ReferenceEquals(p.Event, ev))
+                {
+                    p.Event = classified ?? ev;
+                    p.Held = false;
+                }
+    }
 
     /// <summary>The repeat guard left the held line of <paramref name="ev"/> out: nothing was counted, nothing to settle.</summary>
     public void Drop(object ev) { lock (_pending) _pending.RemoveAll(p => ReferenceEquals(p.Event, ev)); }
