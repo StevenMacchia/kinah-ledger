@@ -146,8 +146,12 @@ public static class WindowCapture
         {
             var frame = pool.TryGetNextFrame();
             if (frame == null) return;
-            lock (Lock)
+            // The capture worker must return its frame even while a reader is copying the previous one. Waiting for
+            // the reader's lock here can stall the Windows worker that the graphics copy is waiting for.
+            if (!Monitor.TryEnter(Lock)) { frame.Dispose(); return; }
+            try
             {
+                if (pool != _pool) { frame.Dispose(); return; }
                 Offer(frame.Surface, frame);
                 if (frame.ContentSize.Width != _size.Width || frame.ContentSize.Height != _size.Height)
                 {
@@ -155,6 +159,7 @@ public static class WindowCapture
                     _pool?.Recreate(_device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, _size);
                 }
             }
+            finally { Monitor.Exit(Lock); }
         }
         catch (Exception) { /* the next frame tries again */ return; }
         try { NewFrame?.Invoke(FrameNumber); } catch (Exception) { /* a handler's error is not the capture's */ }

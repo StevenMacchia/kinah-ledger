@@ -945,6 +945,8 @@ public sealed partial class TrackerSession
                 }
                 else
                 {
+                    // Clear a cover as soon as the game is readable, even when the scene delays the next chat read.
+                    if (Paused.Length > 0) { Paused = ""; _tracker.Rebase(); }
                     // the loot list is read beside the chat, not after it: a pass takes the slower of the two
                     var p0 = DateTime.UtcNow;
                     var off = Update.RemoteConfig.Current;
@@ -1131,8 +1133,6 @@ public sealed partial class TrackerSession
     /// </summary>
     async Task ReadOnce(Gate gate = Gate.Run, Action? beforeCount = null)
     {
-        // back in view: lines that arrived while it was covered weren't seen, so the first read is history and the clocks restart
-        if (Paused.Length > 0) { Paused = ""; _tracker.Rebase(); }
         Engine.Resume(); Secondary?.Resume(); foreach (var v in Views()) v.Resume();
         var lines = await _reader!.ReadAsync();
         _parser.NoteAccents(_reader.LastAccents);
