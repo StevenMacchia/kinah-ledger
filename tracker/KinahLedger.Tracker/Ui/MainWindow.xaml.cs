@@ -562,7 +562,9 @@ public partial class MainWindow : Window
                 Report(L.F("Couldn't see the chat ({0}). Open the chat so its input box shows (press Enter once, or pin the chat window in the game's chat settings), then Detect again, or choose the chat yourself.", note), "Warn");
                 return;
             }
-            _region = region; _prefs.ManualChat = false; RegionStore.Clear();
+            bool wasManual = _watcher.ManualChat != null;
+            _region = region; _prefs.ManualChat = false; RegionStore.Clear(); _watcher.ManualChat = null;
+            if (wasManual) await _watcher.ResetChatAsync();
             ShowFix(false);
             Report(zone != null ? L.F("Found the chat ({0}) and the zone. Press Start whenever you're ready.", note) : L.F("Found the chat ({0}). Press Start whenever you're ready.", note), "Good");
         }
