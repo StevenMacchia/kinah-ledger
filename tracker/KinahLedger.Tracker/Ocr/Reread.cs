@@ -23,6 +23,7 @@ public sealed class Reread
     /// <summary>Loot-shaped: an acquired or obtained line, or a Kina line.</summary>
     public static bool LooksLikeLoot(string line)
     {
+        if (GermanChat.Signature().IsMatch(line.Trim()) || GermanChat.HasLootVerb(line.Trim())) return true;
         var k = Key(line);
         // a letter or two off the verb is still loot ("Asquired Fine Odyle x4.", "Acquiied", "Obtaincd"): the burst dropped
         // Fine Odyle x4 from the 10:06 event rewards over one letter (Steven, 2026-10-23)
@@ -288,7 +289,8 @@ public sealed class Reread
         && !System.Text.RegularExpressions.Regex.IsMatch(line, @"craft|gather|extract|enchant|refin|design", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>"acquired" or "obtained" read as a whole word: "Acquire d", "AcquirGdylO" and "Hatquired" are garbled.</summary>
-    static bool CleanVerb(string line) => System.Text.RegularExpressions.Regex.IsMatch(line, @"(?:^|[\s(])(?:acquired|obtained)(?:[\s.!,]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    internal static bool CleanVerb(string line) => GermanChat.HasLootVerb(ChatParser.StripAccents(line).Trim())
+        || System.Text.RegularExpressions.Regex.IsMatch(line, @"(?:^|[\s(])(?:acquired|obtained)(?:[\s.!,]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>One line read twice: the same digits, and the letters a misread or two apart at most.</summary>
     internal static bool Same(string a, string b)
@@ -342,7 +344,8 @@ public sealed class Reread
     /// "? quired 756 Kina", "Acquire d 203 Rank Point(s)"): such a line's digits were read fading too.
     /// </summary>
     internal static bool VerbWhole(string raw) =>
-        System.Text.RegularExpressions.Regex.IsMatch(ChatParser.StripAccents(raw), @"acquired|obtained", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        GermanChat.HasLootVerb(ChatParser.StripAccents(raw).Trim())
+        || System.Text.RegularExpressions.Regex.IsMatch(ChatParser.StripAccents(raw), @"acquired|obtained", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>A line with glyphs the chat never prints (•, *, €, @ …): read while fading in, not a clean line.</summary>
     internal static bool Junky(string line) => line.Any(c => !char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c) && "'’.,:;!?()[]-–_/x×\"+%&".IndexOf(c) < 0);

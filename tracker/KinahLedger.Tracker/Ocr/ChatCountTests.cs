@@ -66,6 +66,90 @@ static class ChatCountTests
         string Log() { try { return File.ReadAllText(Path.Combine(CrashLog.Dir, "reads.log")); } catch (Exception) { return ""; } }
         int N(TrackerSession ss, string name) => ss.Engine.Items.Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
 
+        // The Global German client shows the kill's bound Kinah before the item and Soul Points.
+        const string boundKina = "201 Kinah (Gebunden) erhalten.";
+        const string soul = "Seelenpunkte (2x) erhalten: Krieger (Momo).";
+        const string spiritstone = "Geiststein erhalten.";
+        Check("German Kinah with a thousands separator", P(p, "1.234 Kinah erhalten."), "Kina 1234");
+        Check("German Kinah vote through a smudged verb", p.Meaning("392 Kinah (Gebunden),erhålten.").Key, "k:392");
+        Check("German Soul Points and enemy", p.Parse("Seelenpun kte (lx) erhalten: Krieger (Momo).", t0).SingleOrDefault() is CurrencyGained { Amount: 1, Enemy: "Krieger (Momo)" } ? "yes" : "no", "yes");
+        Check("German item, count and player chat", P(p, spiritstone) + " · " + P(p, "Geiststein (2x) erhalten.") + " · " + P(p, "[Krieger] " + boundKina), "Spiritstone x1 · Spiritstone x2 · (nothing)");
+        Check("German Spiritstone with stray OCR marks", P(p, "'G'eiststein erhalten:"), "Spiritstone x1");
+        Check("German Raw Leather from the live System tab", P(p, "Rohleder erhalten."), "Raw Leather x1");
+        Check("German equipment from live chat", P(p, "Helm des Chaos,érhalten.•") + " · " + P(p, "Grimoire des Traumtrugs erhalten."), "Chaos Helm x1 · Phantasm Spellbook x1");
+        Check("German Fresh Fruit through observed OCR slips", P(p, "Frisché Fbücht erhålgen„v"), "Fresh Fruit x1");
+        string PickupId(string line) => p.Parse(line, t0).SingleOrDefault() is ItemAcquired a ? $"{a.ItemId} x{a.Count} bound={a.Bound}" : "(nothing)";
+        Check("German imported names tolerate accents and ß in OCR",
+            PickupId("Steakwurfel des Weissen Drachen (3x) erhalten."), "510715007 x3 bound=False");
+        Check("German tradeable and explicitly bound variants keep their IDs",
+            PickupId("Rohleder erhalten.") + " · " + PickupId("Rohleder (Gebunden) (2x) erhalten."), "610530011 x1 bound=False · 630530005 x2 bound=True");
+        Check("German equipment can use binding to distinguish otherwise identical names",
+            PickupId("Helm des Chaos erhalten.") + " · " + PickupId("Helm des Chaos (Gebunden) erhalten."), "210350009 x1 bound=False · 210350086 x1 bound=True");
+        Check("German client-only ID has a name for chat voting and saved runs",
+            PickupId("Balaur-Essenz (4x) erhalten.") + " · " + p.Meaning("Balaur-Essenz (4x) erhalten.").Key, "600590001 x4 bound=False · i:balaur's essencex4");
+        Check("German unlisted, ambiguous and group messages are skipped",
+            P(p, "Erfundener Gegenstand erhalten.") + " · " + P(p, "Edler Gürtel erhalten.") + " · " + P(p, "Jemand hat Rohleder per Gruppenverteilung erhalten."), "(nothing) · (nothing) · (nothing)");
+        Check("German player chat and Kinah don't become item pickups",
+            P(p, "[Player] Rohleder erhalten.") + " · " + P(p, "Kinah erhalten."), "(nothing) · (nothing)");
+        Check("German OCR normalizes punctuation and lost spaces throughout item names",
+            P(p, "FrischeFrucht erhalten.") + " | " + P(p, "Frisches Rohfleisch'erhalten.,") + " | " + P(p, "Balaur Essenz.erhalten."),
+            "Fresh Fruit x1 | Fresh Raw Meat x1 | Balaur's Essence x1");
+        Check("German OCR uses the same close-name rule across the catalog",
+            PickupId("R0h1eder (2x) erhalten.") + " | " + PickupId("Schattiger Bogcn erhalten.") + " | " + P(p, "Qiststein erhalten."),
+            "610530011 x2 bound=False | 110460021 x1 bound=False | Spiritstone x1");
+        Check("German OCR votes distinguish a likely name from an exact read",
+            $"{p.Meaning("R0h1eder erhalten.").Exact}/{p.Meaning("Rohleder erhalten.").Exact}", "False/True");
+        Check("German OCR preserves item ratings when removing damaged punctuation",
+            PickupId("Potenzial-Versta.rkungsstein: Waffe [★★] (Gebunden) erhalten."), "537000004 x1 bound=True");
+        Check("German OCR refuses a different duration and a bracketed speaker's fuzzy name",
+            P(p, "Geiststein der Wiederbelebung (8 Tage) (Gebunden) erhalten.") + " | " + P(p, "[Player] R0h1eder erhalten."),
+            "(nothing) | (nothing)");
+        {
+            var german = new TrackerSession(null, settings, items, "Test");
+            var history = new List<string> { "[P1] hallo", "[P2] guten tag" };
+            german.ProcessChat(history, t0);
+            var wrap = history.Concat(new[] { "435 Kinah (Gebunden) erhalten.", "Handschuhe des Traumtrug.s*,?", "erhalten.",
+                "R0h1eder", "(2x) erhalten.", soul }).ToList();
+            for (int i = 1; i <= 5; i++) german.ProcessChat(wrap, t0.AddSeconds(i * 0.6));
+            german.FlushVotes(t0.AddSeconds(4));
+            Check("German wrapped OCR names and counts go through the live voter once",
+                $"{N(german, "Phantasm Gloves")}/{N(german, "Raw Leather")}", "1/2");
+        }
+        Check("German bound Kinah with no kill stays a reward", p.ParseBatch(new[] { boundKina }, t0)[0].Events.SingleOrDefault() is KinahChanged { Bound: true, KillPay: false } ? "yes" : "no", "yes");
+        {
+            var game = new System.Drawing.Rectangle(0, 0, 2000, 1130);
+            var boxes = new List<OcrLineBox> {
+                new(boundKina, new(49, 1000, 225, 13)), new(soul, new(49, 1040, 313, 13)),
+            };
+            var found = ChatLocator.DetectAsync(game, null, (_, _, _) => Task.FromResult(new List<OcrLineBox>()), (_, _, _) => Task.FromResult(boxes)).GetAwaiter().GetResult();
+            Check("frameless German chat located from gold lines", found.region is { } region && boxes.All(b => region.Contains(b.Box)) ? "yes" : "no", "yes");
+            var read = ScreenReader.MergeGermanChat(new List<OcrLineBox> { new("2201'1Kinåh", new(50, 1000, 75, 13)), new(spiritstone, new(49, 1020, 145, 13)), boxes[1] }, boxes);
+            Check("German OCR fallback fills a damaged row without duplicates", string.Join(" · ", read), $"{boundKina} · {spiritstone} · {soul}");
+
+            var german = new TrackerSession(null, settings, items, "Test") { Vote = false };
+            var history = new List<string> { "[P1] hallo", "[P2] guten tag" };
+            german.ProcessChat(history, t0);
+            german.ProcessChat(history.Concat(read).ToList(), t0.AddSeconds(1));
+            german.FlushVotes(t0.AddSeconds(2));
+            Check("German kill counts its bound Kinah and Spiritstone", $"{german.Engine.Kinah} Kina · {N(german, "Spiritstone")} item", "201 Kina · 1 item");
+        }
+        {
+            const string kina = "308 Kinah (Gebunden) erhalten.";
+            const string warning = "Zielauswahl erforderlich.";
+            const string stone = "Veredelungsstein erhalten.";
+            const string soulHead = "Seelenpunkte (1x) erhalten:";
+            const string enemy = "Krieger (Momo).";
+            var game = new System.Drawing.Rectangle(0, 0, 2000, 1130);
+            var newest = new OcrLineBox(enemy, new(85, 1018, 145, 17));
+            var input = new OcrLineBox("diesem Tab nicht verfugbar.", new(148, 1070, 220, 14));
+            var visible = new List<OcrLineBox> { new(kina, new(85, 908, 285, 18)), newest };
+            var found = ChatLocator.DetectAsync(game, null, (_, scale, _) => Task.FromResult(scale == 1 ? visible : new List<OcrLineBox> { input })).GetAwaiter().GetResult();
+            Check("German System tab includes newest line and excludes input", found.region is { } region && region.Contains(newest.Box) && !region.IntersectsWith(input.Box) ? "yes" : "no", "yes");
+            var read = p.ParseBatch(new[] { kina, warning, stone, soulHead, enemy }, t0);
+            Check("German wrapped kill counts Kinah past targeting notice and item", read[0].Events.SingleOrDefault() is KinahChanged { KillPay: true, Delta: 308 } ? "yes" : "no", "yes");
+            Check("German Refining Stone stays a known pickup", string.Join("; ", read[2].Events.Select(D)), "Refining Stone x1");
+        }
+
         // the session: the loot list's row with its icon, then the chat line that lost its count
         {
             var s = new TrackerSession(null, settings, items, "Test") { Vote = false };

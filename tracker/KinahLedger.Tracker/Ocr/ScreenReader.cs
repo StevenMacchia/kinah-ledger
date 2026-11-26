@@ -34,6 +34,7 @@ public sealed class ScreenReader
     readonly TextScale? _auto;
     readonly object _lock = new();
     Bitmap? _thumb;
+    bool _germanChat;
 
     public Rectangle Region => _region;
 
@@ -273,9 +274,37 @@ public sealed class ScreenReader
                 if (_auto.Observe(heights)) CrashLog.Note($"the chat's text is {_auto.TextPx:0} px tall on this screen: now read at {_auto.Factor:0.##}x (was {was:0.##}x)");
             }
             var lines = result.Lines.Select(l => l.Text.Trim()).Where(t => t.Length > 0).ToList();
+            _germanChat |= lines.Any(l => GermanChat.Signature().IsMatch(ChatParser.StripAccents(l)));
+            // A newly located chat can have no legible words in the normal read yet.
+            if (_germanChat || CaptureReads == 1 && !lines.Any(Reread.VerbWhole))
+            {
+                var gold = await ReadGoldChatAsync(raw, Point.Empty, Math.Max(factor, 3));
+                var german = gold.Where(l => GermanChat.Currency(ChatParser.StripAccents(l.Text), default) != null).ToList();
+                _germanChat |= german.Count >= 2;
+                if (_germanChat && german.Count > 0) lines = MergeGermanChat(BoxesOf(result, Point.Empty, f), german);
+            }
             _same = skip ? new SameRead(hash, factor, raw.Size, lines, heights) : null;
             return lines;
         }
+    }
+
+    internal static async Task<List<OcrLineBox>> ReadGoldChatAsync(Bitmap raw, Point origin, double scale)
+    {
+        using var mask = NameMask(raw);
+        return await BoxesOf(mask, origin, scale);
+    }
+
+    internal static List<string> MergeGermanChat(List<OcrLineBox> normal, IReadOnlyList<OcrLineBox> goldRows)
+    {
+        foreach (var row in goldRows)
+        {
+            int middle = row.Box.Top + row.Box.Height / 2;
+            bool SameRow(OcrLineBox line) => middle >= line.Box.Top && middle < line.Box.Bottom;
+            if (normal.Any(l => SameRow(l) && GermanChat.Currency(ChatParser.CleanSystemLine(l.Text), default) != null)) continue;
+            normal.RemoveAll(l => SameRow(l) && Math.Abs(l.Box.Left - row.Box.Left) < row.Box.Height * 2);
+            normal.Add(row);
+        }
+        return normal.OrderBy(l => l.Box.Top).Select(l => l.Text).ToList();
     }
 
     /// <summary>The last recognized read, by its boosted pixels' fingerprint, for ocr.chat_skip_same.</summary>
@@ -428,25 +457,30 @@ public sealed class ScreenReader
         using (bmp)
         {
             var result = await Recognize(bmp);
-            var list = new List<OcrLineBox>();
-            foreach (var line in result.Lines)
-            {
-                double l = double.MaxValue, t = double.MaxValue, r = 0, b = 0;
-                var words = new List<OcrWordBox>();
-                foreach (var w in line.Words)
-                {
-                    var wb = w.BoundingRect;
-                    l = Math.Min(l, wb.X); t = Math.Min(t, wb.Y); r = Math.Max(r, wb.X + wb.Width); b = Math.Max(b, wb.Y + wb.Height);
-                    var wt = w.Text.Trim();
-                    if (wt.Length > 0) words.Add(new OcrWordBox(wt, Rectangle.FromLTRB(origin.X + (int)(wb.X / f), origin.Y + (int)(wb.Y / f), origin.X + (int)Math.Ceiling((wb.X + wb.Width) / f), origin.Y + (int)Math.Ceiling((wb.Y + wb.Height) / f))));
-                }
-                if (r <= 0) continue;
-                var box = Rectangle.FromLTRB(origin.X + (int)(l / f), origin.Y + (int)(t / f), origin.X + (int)Math.Ceiling(r / f), origin.Y + (int)Math.Ceiling(b / f));
-                var text = line.Text.Trim();
-                if (text.Length > 0) list.Add(new OcrLineBox(text, box, words));
-            }
-            return list;
+            return BoxesOf(result, origin, f);
         }
+    }
+
+    static List<OcrLineBox> BoxesOf(OcrResult result, Point origin, double f)
+    {
+        var list = new List<OcrLineBox>();
+        foreach (var line in result.Lines)
+        {
+            double l = double.MaxValue, t = double.MaxValue, r = 0, b = 0;
+            var words = new List<OcrWordBox>();
+            foreach (var w in line.Words)
+            {
+                var wb = w.BoundingRect;
+                l = Math.Min(l, wb.X); t = Math.Min(t, wb.Y); r = Math.Max(r, wb.X + wb.Width); b = Math.Max(b, wb.Y + wb.Height);
+                var wt = w.Text.Trim();
+                if (wt.Length > 0) words.Add(new OcrWordBox(wt, Rectangle.FromLTRB(origin.X + (int)(wb.X / f), origin.Y + (int)(wb.Y / f), origin.X + (int)Math.Ceiling((wb.X + wb.Width) / f), origin.Y + (int)Math.Ceiling((wb.Y + wb.Height) / f))));
+            }
+            if (r <= 0) continue;
+            var box = Rectangle.FromLTRB(origin.X + (int)(l / f), origin.Y + (int)(t / f), origin.X + (int)Math.Ceiling(r / f), origin.Y + (int)Math.Ceiling(b / f));
+            var text = line.Text.Trim();
+            if (text.Length > 0) list.Add(new OcrLineBox(text, box, words));
+        }
+        return list;
     }
 }
 

@@ -19,7 +19,7 @@ public static class DataFiles
     public static string FileUrl { get; set; } = "https://raw.githubusercontent.com/StevenMacchia/kinah-ledger/main/data/";
     public static string ManifestUrl => FileUrl + "manifest.json";
     /// <summary>The files that can update this way; each is also built into the exe under the same name.</summary>
-    public static readonly string[] Names = { "zones.txt", "instances.txt", "mobs.txt", "loot-tables.json", "skins.json", "recipes.json", "mob-images.json", "gathering-items.json", "aliases.json", "vendor-prices.json" };
+    public static readonly string[] Names = { "zones.txt", "instances.txt", "mobs.txt", "loot-tables.json", "skins.json", "recipes.json", "mob-images.json", "gathering-items.json", "aliases.json", "vendor-prices.json", GermanItemCatalog.FileName };
 
     /// <summary>Tests point this elsewhere so the player's own copies are never touched.</summary>
     public static string? DirOverride { get; set; }

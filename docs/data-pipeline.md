@@ -1,6 +1,18 @@
 # Kinah Ledger data pipeline
 
-How item data gets from NCSOFT's Taiwan item dictionary into the site, what each piece does, how the owner runs it, and what is still undecided. The `tracker/` folder is a separate agent's work and is not part of this pipeline.
+How item data gets from NCSOFT's Taiwan item dictionary into the site and how the tracker gets German item names from the Global client.
+
+## German item names in the tracker
+
+Use decoded exports of the same AION 2 Global client build. The item export has the table's `Version` and `Properties.Data` rows. The `de-DE` and `en-US` exports each have an `Entries` map from string keys to text.
+
+~~~sh
+node tools/data/german-item-names.js Item.json l10n_de-DE.json l10n_en-US.json
+node tools/data/manifest.js
+node tools/data-check.js
+~~~
+
+The generator joins each row's `ID.Value` to both localized names through `String_{Desc.Key}_body`. It writes the names and the item metadata needed for pickup counting to `data/item-names.de-DE.json`. The tracker embeds this file and can refresh it through the data manifest. Keep the original client archives and full decoded string tables outside the repository.
 
 ## The pieces
 

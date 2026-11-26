@@ -62,6 +62,21 @@ if (tw) {
   });
 }
 const twNames = new Set(names);
+const germanItems = json('item-names.de-DE.json');
+if (germanItems) {
+  const file = 'item-names.de-DE.json';
+  if (!Number.isInteger(germanItems.tableVersion) || !Array.isArray(germanItems.items) || !germanItems.items.length) {
+    bad(file, 'expected a table version and a non-empty item list');
+  } else {
+    unique(file, 'item id', germanItems.items.map(item => item.id));
+    for (const { id, de, n, g, t, c } of germanItems.items) {
+      if (!Number.isSafeInteger(id) || id <= 0) bad(file, 'invalid item id');
+      if (!isStr(de) || !isStr(n) || !GRADES.has(g) || typeof t !== 'boolean' || !['Currency', 'Equip', 'Misc', 'Usable'].includes(c)) {
+        bad(file, 'missing name or invalid item metadata for ' + id);
+      }
+    }
+  }
+}
 const extra = json('extra-items.json');
 if (extra) {
   const items = extra.items || [];
