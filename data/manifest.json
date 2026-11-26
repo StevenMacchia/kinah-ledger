@@ -40,6 +40,10 @@
     "vendor-prices.json": {
       "sha256": "ac2be7c3073f909eca1d87add4e4c995cbc8a3992a1d82fa93f0b6d45b5124ce",
       "size": 1356
+    },
+    "item-names.de-DE.json": {
+      "sha256": "00764eaaa055b83e67d78c20f9d37e45afbd47385fa5682e3ab0d16288468c62",
+      "size": 1236763
     }
   },
   "models": {

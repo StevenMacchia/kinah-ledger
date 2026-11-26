@@ -174,6 +174,7 @@ public sealed partial class ChatParser
         bool claim = _purchaseCarry && (time - _purchaseAt).TotalSeconds <= PurchaseSeconds;
         _purchaseCarry = false;
         var parsed = wrap ? Unwrap(lines, time) : lines.Select(l => (Text: l, Events: Parse(l, time).ToList())).ToList();
+        CreditGermanKillPay(parsed);
         for (int i = 0; i < lines.Count; i++)
         {
             var (text, evs) = parsed[i];
@@ -198,6 +199,24 @@ public sealed partial class ChatParser
             break;
         }
         return outp;
+    }
+
+    // The Global client prints a kill's bound Kinah before its Soul Points. An item, the targeting warning or the first
+    // half of a wrapped Soul Points line can sit between them.
+    static void CreditGermanKillPay(List<(string Text, List<GameEvent> Events)> parsed)
+    {
+        for (int i = 1; i < parsed.Count; i++)
+        {
+            if (parsed[i].Events is not [CurrencyGained { Name: "Soul Points", Enemy.Length: > 0 }]
+                || !GermanChat.Signature().IsMatch(parsed[i].Text)) continue;
+            int previous = i - 1;
+            while (previous >= 0 && i - previous < 4 && (parsed[previous].Text == JoinedMark
+                || parsed[previous].Events is [ItemAcquired] || GermanChat.TargetRequired().IsMatch(parsed[previous].Text))) previous--;
+            if (previous < 0) continue;
+            var (text, events) = parsed[previous];
+            if (events is [KinahChanged { Bound: true, Delta: > 0 and <= SessionEngine.AbyssKillKinaMax } k]
+                && GermanChat.Signature().IsMatch(text)) events[0] = k with { KillPay = true };
+        }
     }
 
     /// <summary>
@@ -355,7 +374,7 @@ public sealed partial class ChatParser
     /// </summary>
     public GameEvent AsReward(GameEvent ev) => ev switch
     {
-        KinahChanged { Bound: false } k => new KinahChanged(k.Time, k.Delta, true),
+        KinahChanged k when !k.Bound || k.KillPay => new KinahChanged(k.Time, k.Delta, true),
         ItemAcquired a => new RewardReceived(a.Time, _items.NameOf(a.ItemId), a.Count),
         _ => ev,
     };
@@ -636,8 +655,16 @@ public sealed partial class ChatParser
     public (string Key, bool Exact) Meaning(string raw)
     {
         var line = Timestamp().Replace(raw.Trim(), "");
-        if (line.Length == 0 || line.StartsWith('[')) return ("", false);
-        line = OwnLine(CleanSystemLine(line));
+        if (line.Length == 0) return ("", false);
+        line = CleanSystemLine(line);
+        switch (GermanChat.Currency(line, default))
+        {
+            case KinahChanged k1: return ("k:" + k1.Delta, true);
+            case CurrencyGained s: return ($"s:{s.Amount}:{s.Enemy.ToLowerInvariant()}", true);
+        }
+        if (GermanChat.Pickup(line, _items) is { } pickup) return ("i:" + _items.NameOf(pickup.Id).ToLowerInvariant() + "x" + pickup.Count, pickup.Exact);
+        if (line.StartsWith('[')) return ("", false);
+        line = OwnLine(line);
         if (SomeoneElses(line)) return ("", false);
         line = WithoutDistribution(line);
         var k = Kina().Match(line);
@@ -685,8 +712,18 @@ public sealed partial class ChatParser
     {
         var line = Timestamp().Replace(rawLine.Trim(), "");
         if (line.Length == 0) yield break;
-        if (!line.StartsWith('[')) line = CleanSystemLine(line);
+        line = CleanSystemLine(line);
         if (line.Length == 0) yield break;
+        if (GermanChat.Currency(line, time) is { } currencyEvent) { yield return currencyEvent; yield break; }
+        if (GermanChat.Pickup(line, _items) is { } pickup)
+        {
+            var name = _items.NameOf(pickup.Id);
+            if (!Update.RemoteConfig.Current.SkinsCount && name.Contains("(Skin:", StringComparison.OrdinalIgnoreCase)) yield break;
+            if (pickup.Exact && AccentOf(rawLine) is { } a && GradeOf(pickup.Id) is { Length: > 0 } grade) Colours?.Observe(grade, a);
+            NoteCount(rawLine, false);
+            yield return new ItemAcquired(time, pickup.Id, pickup.Count, pickup.Bound) { Via = pickup.Exact ? "" : "guessed" };
+            yield break;
+        }
         if (line.StartsWith('[') || Title().IsMatch(line)) yield break;   // player chat, or a title being claimed
         line = OwnLine(line);
         if (SomeoneElses(line)) yield break;
@@ -969,6 +1006,9 @@ public sealed partial class ChatParser
     public bool IsKillPay(string raw)
     {
         var line = Timestamp().Replace(raw.Trim(), "");
+        if (GermanChat.Signature().IsMatch(line))
+            return GermanChat.Currency(CleanSystemLine(line), default) is KinahChanged { Delta: > 0 and < 1000 }
+                or CurrencyGained { Amount: > 0 and < 1000 };
         if (line.Length == 0 || line.StartsWith('[') || !line.Any(char.IsDigit) || !Regex.IsMatch(line, @"kin|poin|abys|ran", RegexOptions.IgnoreCase)) return false;
         // the verb broken while the line faded in ("c quired 223 Abyss P", ": quired 220 Kino."): mended for this look alone;
         // the line counts, or not, on its own parse

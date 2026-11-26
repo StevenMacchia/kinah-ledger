@@ -139,6 +139,7 @@ public static class GameWindow
 public static class ChatLocator
 {
     static readonly Regex Input = new(@"enter\s+your\s+messag|your\s+message", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly Regex GermanInput = new(@"\bdiesem\s+tab\s+nicht\s+verf[üu]gbar\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // what a chat line looks like on its own: "[Name] text" from a player, or one of the game's own messages
     static readonly Regex ChatLine = new(@"^\[[^\]]{2,20}\]\s|joined event|acquired|Kina|defeated|Obtained|failed|has logged in", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -155,23 +156,46 @@ public static class ChatLocator
     /// <param name="area">Where to look: the bottom-left quarter (null), or the area around the chat's anchor once it has
     /// held still (Anchors.ChatCrop, layout.anchor.chat), a quarter of the pixels on a 5120x2160 window.</param>
     public static Task<(Rectangle? region, string note)> DetectAsync(Rectangle game, Rectangle? area = null)
-        => DetectAsync(game, area, (r, scale, boost) => ScreenReader.ReadBoxesAsync(r, scale, boost));
+        => DetectAsync(game, area, (r, scale, boost) => ScreenReader.ReadBoxesAsync(r, scale, boost), async (r, scale, _) =>
+        {
+            using var raw = ScreenReader.Capture(r);
+            return await ScreenReader.ReadGoldChatAsync(raw, r.Location, scale);
+        });
 
     /// <summary>Reads the text boxes of a part of the window: the screen live, or a saved picture of the window (the bench).</summary>
     public delegate Task<List<OcrLineBox>> BoxReader(Rectangle area, int scale, bool boost);
 
     /// <summary>The same detection with the reads taken from <paramref name="read"/>, so a recording can be located offline (BenchReplay).</summary>
-    public static async Task<(Rectangle? region, string note)> DetectAsync(Rectangle game, Rectangle? area, BoxReader read)
+    public static async Task<(Rectangle? region, string note)> DetectAsync(Rectangle game, Rectangle? area, BoxReader read, BoxReader? readGold = null)
     {
         var corner = area ?? Corner(game);
         var lines = await read(corner, 1, false);
-        var input = lines.FirstOrDefault(l => Input.IsMatch(l.Text));
-        if (input == null) return await FromLines(game, lines, corner, read);
+        var input = lines.FirstOrDefault(l => Input.IsMatch(l.Text) || GermanInput.IsMatch(l.Text));
+        if (input == null && lines.Any(l => GermanChat.Signature().IsMatch(l.Text)))
+        {
+            // In the German System tab the disabled input is drawn in small, dark text below the gold chat lines.
+            var inputArea = Rectangle.Intersect(corner, new Rectangle(game.Left, game.Bottom - game.Height / 6, MinChatWidth(game) + 64, game.Height / 6));
+            if (!inputArea.IsEmpty)
+            {
+                var inputLines = await read(inputArea, 2, false);
+                input = inputLines.FirstOrDefault(l => GermanInput.IsMatch(l.Text));
+                if (input != null) lines.AddRange(inputLines.Where(l => l.Box.Top >= input.Box.Top - 6));
+            }
+        }
+        if (input == null) return await FromLines(game, lines, corner, read, readGold);
 
         // the input row starts with the channel tab ("Common"); the chat's left edge is there, not where the placeholder text starts
         int rowMid = input.Box.Top + input.Box.Height / 2;
         var row = lines.Where(l => l.Box.Top <= rowMid && l.Box.Bottom >= rowMid && l.Box.Left <= input.Box.Left).ToList();
         int rowLeft = row.Count > 0 ? row.Min(l => l.Box.Left) : input.Box.Left;
+        if (GermanInput.IsMatch(input.Text))
+        {
+            // The channel tab can be too dark to read. Use the left edge of the nearby system messages as well.
+            int leftLimit = rowLeft - game.Height / 8;
+            rowLeft = lines.Where(l => l.Box.Left >= leftLimit && l.Box.Left < rowLeft && l.Box.Bottom <= input.Box.Top
+                    && input.Box.Top - l.Box.Bottom < game.Height * 0.4 && GermanChat.Signature().IsMatch(l.Text))
+                .Select(l => l.Box.Left).DefaultIfEmpty(rowLeft).Min();
+        }
 
         var above = lines
             .Where(l => l != input && l.Box.Bottom <= input.Box.Top + 4
@@ -194,7 +218,7 @@ public static class ChatLocator
     /// when idle, so there is no input row to anchor on. The lines are left-aligned, so two or more chat-shaped lines that
     /// share a left edge give the position; the box is sized the way the input-row path sizes it.
     /// </summary>
-    static async Task<(Rectangle? region, string note)> FromLines(Rectangle game, List<OcrLineBox> lines, Rectangle area, BoxReader read)
+    static async Task<(Rectangle? region, string note)> FromLines(Rectangle game, List<OcrLineBox> lines, Rectangle area, BoxReader read, BoxReader? readGold)
     {
         var chat = ChatLines(lines);
         bool boosted = false;
@@ -204,6 +228,17 @@ public static class ChatLocator
             lines = await read(area, 2, true);
             chat = ChatLines(lines);
             boosted = true;
+        }
+        // In frameless chat, bright scenery can obscure the words in both reads. Check the gold system text alone.
+        if (readGold != null && (chat.Count < 2 || !chat.Any(l => Reread.VerbWhole(l.Text)) || chat.Any(l => GermanChat.Signature().IsMatch(l.Text))))
+        {
+            var goldArea = Rectangle.Intersect(area, new Rectangle(game.Left, area.Top, MinChatWidth(game) + 64, area.Height));
+            if (!goldArea.IsEmpty)
+            {
+                var gold = await readGold(goldArea, 3, false);
+                var system = ChatLines(gold.Where(l => GermanChat.HasLootVerb(ChatParser.StripAccents(l.Text))).ToList());
+                if (system.Count >= 2) chat = system;
+            }
         }
         if (chat.Count < 2) return (null, $"couldn't see the chat input box or any chat lines in the bottom-left corner ({lines.Count} lines read)");
 
@@ -222,7 +257,7 @@ public static class ChatLocator
     /// <summary>Chat-shaped lines that share the most common left edge (within 40 px): the chat is left-aligned, stray UI text isn't.</summary>
     static List<OcrLineBox> ChatLines(List<OcrLineBox> lines)
     {
-        var shaped = lines.Where(l => ChatLine.IsMatch(l.Text.Trim())).ToList();
+        var shaped = lines.Where(l => ChatLine.IsMatch(l.Text.Trim()) || GermanChat.Signature().IsMatch(l.Text.Trim())).ToList();
         if (shaped.Count < 2) return shaped;
         var anchor = shaped
             .OrderByDescending(a => shaped.Count(b => Math.Abs(b.Box.Left - a.Box.Left) <= 40))

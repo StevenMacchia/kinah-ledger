@@ -37,7 +37,13 @@ public sealed class ItemDictionary
             return i.Icon.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? i.Icon : IconBase + i.Icon;
         }
     }
-    public ItemInfo? Get(long id) { lock (_lock) return _byId.GetValueOrDefault(id); }
+    public ItemInfo? Get(long id)
+    {
+        lock (_lock)
+            if (_byId.TryGetValue(id, out var item)) return item;
+        // Global-only IDs have metadata for chat and saved runs, outside the English name-matching index.
+        return GermanItemCatalog.ById(id);
+    }
 
     /// <summary>
     /// The game's own item ids of extras that go to the site by name (data/extra-items.json "gameId": Enhance Stone,
@@ -75,7 +81,12 @@ public sealed class ItemDictionary
     /// reward table, a box or a craft, can be sold until it is worn, so it is valued like any other item; whether it is
     /// bound is <see cref="BoundId"/>'s, as for everything else (until then, 2026-10-22, gear from a run was taken as bound).
     /// </summary>
-    public bool IsGear(long id) { lock (_lock) return _gear.Contains(id); }
+    public bool IsGear(long id)
+    {
+        lock (_lock)
+            if (_byId.ContainsKey(id)) return _gear.Contains(id);
+        return GermanItemCatalog.ById(id)?.Category == "Equip";
+    }
 
     /// <summary>
     /// Bound by its own id: the item list's "(Bound)" name, or an id the list says isn't tradable (the bound copy of a pair,
@@ -83,7 +94,7 @@ public sealed class ItemDictionary
     /// an item the list doesn't know is not taken as bound (its name says so when it is, see <see cref="IdOf"/>). Gear is no
     /// exception: it binds on equip, not on the drop (Steven, 2026-11-17).
     /// </summary>
-    public bool BoundId(long id) { lock (_lock) return _byId.TryGetValue(id, out var i) && (!i.Tradable || i.Name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase)); }
+    public bool BoundId(long id) => Get(id) is { } i && (!i.Tradable || i.Name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// The item a name is known by, as the list, the extras, the skins or a misread already snapped spell it, or null.
@@ -101,7 +112,7 @@ public sealed class ItemDictionary
         }
     }
 
-    public string NameOf(long id) { lock (_lock) return _byId.TryGetValue(id, out var i) ? i.Name : $"item {id}"; }
+    public string NameOf(long id) => Get(id)?.Name ?? $"item {id}";
 
     /// <summary>
     /// Listed items whose name holds the text, for a name box's completion (Options › In game › Rare drops): names that

@@ -1344,6 +1344,7 @@ public sealed partial class TrackerSession
     internal void ProcessChat(List<string> lines, DateTime now)
     {
         _ctxNow = now;
+        lines = GermanChat.JoinPickupTails(lines, _items);
         ChatSeen(lines, now);   // new chat lines: the next loot list capture is recognized (ocr.list_skip_same)
         GatherTick(now);
         Seen(now);
@@ -4069,7 +4070,7 @@ public sealed partial class TrackerSession
     public const double SettleBoundSeconds = 6;
     /// <summary>A loot line whose verb didn't read whole ("Acquire d Fine OJy1e"): the chat is still fading in.</summary>
     static bool GarbledLoot(string l) => Reread.LooksLikeLoot(l) && !l.TrimStart().StartsWith('[')
-        && !Regex.IsMatch(ChatParser.CleanSystemLine(l), @"(?:^|[\s(])(?:acquired|obtained)(?:[\s.!,]|$)", RegexOptions.IgnoreCase);
+        && !Reread.CleanVerb(ChatParser.CleanSystemLine(l));
     /// <summary>Lines the settle counted that were first on screen after the reads lined up again (the replay bank's chat_settled_late).</summary>
     public int SettledLate { get; private set; }
     /// <summary>

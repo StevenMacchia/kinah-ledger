@@ -92,6 +92,7 @@
     <EmbeddedResource Include="..\..\data\gathering-items.json" LogicalName="gathering-items.json" />
     <!-- the game's item list (the crawler's output, 6,324 items): the whitelist for drops, so a misread name can never become one -->
     <EmbeddedResource Include="..\..\data\tw-items.json" LogicalName="tw-items.json" />
+    <EmbeddedResource Include="..\..\data\item-names.de-DE.json" LogicalName="item-names.de-DE.json" WithCulture="false" />
     <!-- zone and area names as the minimap prints them: the whitelist for zones -->
     <EmbeddedResource Include="..\..\data\zones.txt" LogicalName="zones.txt" />
     <!-- dungeons, trials, arenas and event areas, with the kind a run spent in one is filed under -->
